@@ -34,7 +34,7 @@ function InfoCard({ widget }) {
 
 export function Dashboard({ ticker, navigate }) {
   const [status, setStatus] = useState("loading"); // loading | done | error | timeout | unauthenticated
-  const [toolCalls, setToolCalls] = useState([]);
+  const [toolGroups, setToolGroups] = useState([]);
   const [result, setResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -44,7 +44,7 @@ export function Dashboard({ ticker, navigate }) {
     const runId = ++runIdRef.current;
     const controller = new AbortController();
     setStatus("loading");
-    setToolCalls([]);
+    setToolGroups([]);
     setResult(null);
     setErrorMessage(null);
     setElapsedSeconds(0);
@@ -55,26 +55,37 @@ export function Dashboard({ ticker, navigate }) {
     }, 1000);
     const timeout = setTimeout(() => controller.abort("timeout"), RESEARCH_TIMEOUT_MS);
 
+    // Repeated calls to the same connection (common on companies with long
+    // filing histories) collapse into one row with a count, instead of a
+    // long, near-identical list.
+    const idToKey = new Map();
+
     runResearchQuery(buildPrompt(ticker), {
       signal: controller.signal,
       onEvent: (evt) => {
         if (runId !== runIdRef.current) return;
         if (evt.type === "tool_call_start" || evt.type === "tool_call_result") {
-          setToolCalls((prev) => {
-            const next = [...prev];
-            const idx = next.findIndex((c) => c.id === evt.tool_id);
+          setToolGroups((prev) => {
             if (evt.type === "tool_call_start") {
+              const label = evt.running_label ?? evt.tool_name;
+              const doneLabel = evt.completed_label ?? label;
+              const key = doneLabel;
+              idToKey.set(evt.tool_id, key);
+
+              const idx = prev.findIndex((g) => g.key === key);
               if (idx === -1) {
-                next.push({
-                  id: evt.tool_id,
-                  label: evt.running_label ?? evt.tool_name,
-                  doneLabel: evt.completed_label ?? evt.running_label ?? evt.tool_name,
-                  status: "running",
-                });
+                return [...prev, { key, label, doneLabel, count: 1, active: 1 }];
               }
-            } else if (idx !== -1) {
-              next[idx] = { ...next[idx], status: evt.status ?? "success" };
+              const next = [...prev];
+              next[idx] = { ...next[idx], count: next[idx].count + 1, active: next[idx].active + 1 };
+              return next;
             }
+
+            const key = idToKey.get(evt.tool_id);
+            const idx = prev.findIndex((g) => g.key === key);
+            if (idx === -1) return prev;
+            const next = [...prev];
+            next[idx] = { ...next[idx], active: Math.max(0, next[idx].active - 1) };
             return next;
           });
         }
@@ -159,14 +170,15 @@ export function Dashboard({ ticker, navigate }) {
         </div>
       )}
 
-      {(status === "loading" || toolCalls.length > 0) && status !== "unauthenticated" && (
+      {(status === "loading" || toolGroups.length > 0) && status !== "unauthenticated" && (
         <div className="progress-list">
-          {status === "loading" && toolCalls.length === 0 && (
+          {status === "loading" && toolGroups.length === 0 && (
             <div className="progress-item running">Starting research…</div>
           )}
-          {toolCalls.map((c) => (
-            <div className={"progress-item " + c.status} key={c.id}>
-              {c.status === "running" ? c.label : c.doneLabel}
+          {toolGroups.map((g) => (
+            <div className={"progress-item " + (g.active > 0 ? "running" : "done")} key={g.key}>
+              {g.active > 0 ? g.label : g.doneLabel}
+              {g.count > 1 ? ` ×${g.count}` : ""}
             </div>
           ))}
           {status === "loading" && (
