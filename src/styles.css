@@ -197,6 +197,11 @@ body {
   color: var(--danger);
 }
 
+.progress-elapsed {
+  font-style: italic;
+  opacity: 0.8;
+}
+
 .button {
   display: inline-block;
   margin-top: 10px;

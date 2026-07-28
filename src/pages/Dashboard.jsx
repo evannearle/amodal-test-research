@@ -3,6 +3,8 @@ import { SearchBar } from "../components/SearchBar";
 import { runResearchQuery } from "../lib/chat";
 import { MarkdownLite } from "../lib/markdownLite";
 
+const RESEARCH_TIMEOUT_MS = 120_000;
+
 function buildPrompt(ticker) {
   return (
     `Give me a full research profile for ${ticker}. Include: ` +
@@ -31,10 +33,11 @@ function InfoCard({ widget }) {
 }
 
 export function Dashboard({ ticker, navigate }) {
-  const [status, setStatus] = useState("loading"); // loading | done | error | unauthenticated
+  const [status, setStatus] = useState("loading"); // loading | done | error | timeout | unauthenticated
   const [toolCalls, setToolCalls] = useState([]);
   const [result, setResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const runIdRef = useRef(0);
 
   useEffect(() => {
@@ -44,6 +47,13 @@ export function Dashboard({ ticker, navigate }) {
     setToolCalls([]);
     setResult(null);
     setErrorMessage(null);
+    setElapsedSeconds(0);
+
+    const startedAt = Date.now();
+    const tick = setInterval(() => {
+      setElapsedSeconds(Math.round((Date.now() - startedAt) / 1000));
+    }, 1000);
+    const timeout = setTimeout(() => controller.abort("timeout"), RESEARCH_TIMEOUT_MS);
 
     runResearchQuery(buildPrompt(ticker), {
       signal: controller.signal,
@@ -80,14 +90,25 @@ export function Dashboard({ ticker, navigate }) {
         if (err.code === "UNAUTHENTICATED") {
           setStatus("unauthenticated");
         } else if (err.name === "AbortError") {
-          // navigated away; ignore
+          if (controller.signal.reason === "timeout") {
+            setStatus("timeout");
+          }
+          // otherwise navigated away; ignore
         } else {
           setErrorMessage(err.message ?? "Something went wrong.");
           setStatus("error");
         }
+      })
+      .finally(() => {
+        clearInterval(tick);
+        clearTimeout(timeout);
       });
 
-    return () => controller.abort();
+    return () => {
+      clearInterval(tick);
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [ticker]);
 
   const infoCardWidget = result?.widgets?.find((w) => w.widget === "info-card")?.data;
@@ -126,6 +147,18 @@ export function Dashboard({ ticker, navigate }) {
         </div>
       )}
 
+      {status === "timeout" && (
+        <div className="panel panel-error">
+          <p>
+            This is taking longer than {RESEARCH_TIMEOUT_MS / 1000}s and was stopped. Companies with a
+            long filing history can be slow to research; try again, or ask a narrower question.
+          </p>
+          <button className="button" onClick={() => navigate(`/company/${ticker}`)}>
+            Try again
+          </button>
+        </div>
+      )}
+
       {(status === "loading" || toolCalls.length > 0) && status !== "unauthenticated" && (
         <div className="progress-list">
           {status === "loading" && toolCalls.length === 0 && (
@@ -136,6 +169,11 @@ export function Dashboard({ ticker, navigate }) {
               {c.status === "running" ? c.label : c.doneLabel}
             </div>
           ))}
+          {status === "loading" && (
+            <div className="progress-item running progress-elapsed">
+              Still working… {elapsedSeconds}s
+            </div>
+          )}
         </div>
       )}
 
