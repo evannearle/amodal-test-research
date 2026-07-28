@@ -15,9 +15,9 @@ Trigger: the user names a ticker, a public company, or asks to "research", "prof
    - Company background: name, industry, and a one-line note on former names/transitions if relevant.
    - Key financials (with fiscal year noted).
    - Current stock price and 52-week range.
-   - Cite the source as the company's most recent 10-K (you have its filing date from `get_company_snapshot`'s `latest10K`).
+   - Cite the source as the company's most recent 10-K (you have its filing date and `documentUrl` from `get_company_snapshot`'s `latest10K`).
 5. Only if the user specifically asks about strategy, leadership, or go-to-market/revenue model (either in the original question or a follow-up), fetch the narrative detail: call `fetch_filing_document` with `latest10K.archiveUrl` for strategy (Item 1 Business, Item 7 MD&A) and `latestDEF14A.archiveUrl` for leadership (names/titles) and go-to-market detail. Pass those `archiveUrl` strings through verbatim — don't edit them. This step is slower (large documents); only do it when actually asked.
-6. After a fresh `get_company_snapshot` lookup, write or update the profile in the `company-profiles` store — financials, `current_price`, `price_currency`, `fifty_two_week_high`, `fifty_two_week_low`, and `price_history` at minimum. Add `strategy`, `leadership`, and `go_to_market` to the same record if step 5 ran.
+6. After a fresh `get_company_snapshot` lookup, write or update the profile in the `company-profiles` store — financials, `current_price`, `price_currency`, `fifty_two_week_high`, `fifty_two_week_low`, and `price_history` at minimum. Add `strategy`, `leadership`, and `go_to_market` to the same record if step 5 ran. Save `sources` as a list of `{ label, url }` objects — `label` like `"10-K (Filing Date: 2026-02-27)"`, `url` copied verbatim from `latest10K.documentUrl` / `latestDEF14A.documentUrl`. Don't construct the URL yourself.
 7. If the user asks a narrower follow-up about a company already loaded in this session, answer from what's already loaded rather than redoing the workflow.
 
 ## Constraints

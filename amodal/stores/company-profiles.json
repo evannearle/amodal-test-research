@@ -44,7 +44,13 @@
       },
       "sources": {
         "type": "array",
-        "item": { "type": "string" }
+        "item": {
+          "type": "object",
+          "fields": {
+            "label": { "type": "string" },
+            "url": { "type": "string" }
+          }
+        }
       },
       "last_updated": { "type": "datetime" }
     }

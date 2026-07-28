@@ -283,9 +283,23 @@ export function Dashboard({ ticker, navigate }) {
             <div className="prose sources">
               <h3>Sources</h3>
               <ul className="prose-list">
-                {profile.sources.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
+                {profile.sources.map((s, i) => {
+                  // Older cached profiles saved sources as plain strings;
+                  // newer ones save { label, url }. Handle both.
+                  const label = typeof s === "string" ? s : s.label;
+                  const url = typeof s === "string" ? null : s.url;
+                  return (
+                    <li key={i}>
+                      {url ? (
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          {label}
+                        </a>
+                      ) : (
+                        label
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

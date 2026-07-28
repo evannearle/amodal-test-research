@@ -10,8 +10,10 @@ export default {
       "former names, most recent annual financials (revenue, net income, assets, " +
       "liabilities, equity, diluted EPS, fiscal year), current stock price, " +
       "52-week range, ~6 months of daily closing prices, and the most recent " +
-      "10-K/DEF 14A filings (each with a ready-to-use archiveUrl for " +
-      "fetch_filing_document). Always use this single tool instead of loading " +
+      "10-K/DEF 14A filings, each with an archiveUrl (for fetch_filing_document) " +
+      "and a documentUrl (absolute sec.gov link — use this verbatim as the url " +
+      "when saving a source citation, don't reassemble it). Always use this " +
+      "single tool instead of loading " +
       "company_tickers.json, submissions/CIK{cik}.json, or companyfacts yourself " +
       "— those are too large to scan reliably by reading.",
     parametersJsonSchema: {
@@ -65,12 +67,15 @@ export default {
       if (idx === -1) return null;
       const accessionNoDashes = String(accessions[idx] || "").replace(/-/g, "");
       const primaryDocument = docs[idx];
+      const archiveUrl = `/Archives/edgar/data/${cikNoZeros}/${accessionNoDashes}/${primaryDocument}`;
       return {
         filingDate: dates[idx],
         accessionNumber: accessions[idx],
         accessionNoDashes,
         primaryDocument,
-        archiveUrl: `/Archives/edgar/data/${cikNoZeros}/${accessionNoDashes}/${primaryDocument}`,
+        archiveUrl,
+        // Absolute URL, ready to save as a source link — don't reassemble it.
+        documentUrl: `https://www.sec.gov${archiveUrl}`,
       };
     }
 
