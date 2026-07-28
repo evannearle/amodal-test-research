@@ -5,7 +5,7 @@
   "failPolicy": "open",
   "priority": 0,
   "config": {
-    "maxCallsPerConnection": 4,
+    "maxCallsPerConnection": 0,
     "connections": ["sec-data", "sec-tickers"]
   }
 }
