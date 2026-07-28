@@ -1,8 +1,5 @@
 {
   "endpoints": {
-    "GET /submissions/{cik}": {
-      "returns": ["CompanySubmissions"]
-    },
     "GET /api/xbrl/companyfacts/{cik}": {
       "returns": ["CompanyFacts"]
     },

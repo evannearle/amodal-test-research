@@ -2,6 +2,7 @@
   "name": "Default",
   "skills": ["Equity Research"],
   "connections": ["sec-tickers", "sec-data"],
+  "tools": ["lookup_cik", "get_filing_summary"],
   "stores": {
     "company-profiles": "rw",
     "research-notes": "rw"
