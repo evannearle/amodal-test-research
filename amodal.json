@@ -1,0 +1,5 @@
+{
+  "name": "amodal-test-research",
+  "version": "0.1.0",
+  "description": "Public equities research agent. Pulls company profiles, financials, and filings from SEC EDGAR to summarize business background, strategy, leadership, and go-to-market/revenue model."
+}

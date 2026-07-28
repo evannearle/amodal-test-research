@@ -1,0 +1,19 @@
+{
+  "name": "research-notes",
+  "entity": {
+    "name": "ResearchNote",
+    "key": "{ticker}:{topic}",
+    "schema": {
+      "ticker": { "type": "string" },
+      "topic": { "type": "string" },
+      "note": { "type": "string" },
+      "confidence": {
+        "type": "enum",
+        "values": ["low", "medium", "high"]
+      },
+      "updated_at": { "type": "datetime" }
+    }
+  },
+  "history": { "versions": 3 },
+  "trace": true
+}

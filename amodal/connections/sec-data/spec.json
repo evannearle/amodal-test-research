@@ -1,0 +1,10 @@
+{
+  "baseUrl": "https://data.sec.gov",
+  "format": "rest",
+  "testPath": "/submissions/CIK0000320193.json",
+  "auth": {
+    "type": "header",
+    "header": "User-Agent",
+    "token": "Amodal Research Agent evan@genesee.info"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "endpoints": {
+    "GET /files/company_tickers.json": {
+      "returns": ["TickerDirectory"]
+    },
+    "GET /Archives/edgar/data/{cik}/{accession}/{document}": {
+      "returns": ["FilingDocument"]
+    }
+  }
+}

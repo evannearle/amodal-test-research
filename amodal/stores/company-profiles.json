@@ -1,0 +1,40 @@
+{
+  "name": "company-profiles",
+  "entity": {
+    "name": "CompanyProfile",
+    "key": "{ticker}",
+    "schema": {
+      "ticker": { "type": "string" },
+      "company_name": { "type": "string" },
+      "cik": { "type": "string" },
+      "industry": { "type": "string" },
+      "summary": { "type": "string" },
+      "strategy": { "type": "string" },
+      "go_to_market": { "type": "string" },
+      "leadership": {
+        "type": "array",
+        "item": {
+          "type": "object",
+          "fields": {
+            "name": { "type": "string" },
+            "title": { "type": "string" }
+          }
+        }
+      },
+      "fiscal_year": { "type": "string", "nullable": true },
+      "revenue_usd": { "type": "number", "nullable": true },
+      "net_income_usd": { "type": "number", "nullable": true },
+      "total_assets_usd": { "type": "number", "nullable": true },
+      "total_liabilities_usd": { "type": "number", "nullable": true },
+      "stockholders_equity_usd": { "type": "number", "nullable": true },
+      "diluted_eps_usd": { "type": "number", "nullable": true },
+      "sources": {
+        "type": "array",
+        "item": { "type": "string" }
+      },
+      "last_updated": { "type": "datetime" }
+    }
+  },
+  "history": { "versions": 3 },
+  "trace": true
+}

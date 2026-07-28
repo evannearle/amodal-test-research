@@ -1,0 +1,10 @@
+{
+  "baseUrl": "https://www.sec.gov",
+  "format": "rest",
+  "testPath": "/files/company_tickers.json",
+  "auth": {
+    "type": "header",
+    "header": "User-Agent",
+    "token": "Amodal Research Agent evan@genesee.info"
+  }
+}

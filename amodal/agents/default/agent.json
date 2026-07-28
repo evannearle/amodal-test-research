@@ -1,0 +1,9 @@
+{
+  "name": "Default",
+  "skills": ["Equity Research"],
+  "connections": ["sec-tickers", "sec-data"],
+  "stores": {
+    "company-profiles": "rw",
+    "research-notes": "rw"
+  }
+}
