@@ -1,3 +1,5 @@
+const ARCHIVE_URL_PATTERN = /^\/Archives\/edgar\/data\/\d+\/\d+\/[^/]+$/;
+
 export default {
   id: "fetch_filing_document",
   exposure: { kind: "open" },
@@ -6,15 +8,18 @@ export default {
     name: "fetch_filing_document",
     description:
       "Fetch the text of a SEC filing document using the archiveUrl returned by " +
-      "get_filing_summary (in latest10K.archiveUrl or latestDEF14A.archiveUrl). " +
-      "Pass that value straight through as `url` — do not try to construct or " +
-      "edit the path yourself (it's case-sensitive and easy to get wrong).",
+      "get_company_snapshot (in latest10K.archiveUrl or latestDEF14A.archiveUrl). " +
+      "Pass that value straight through as `url`, character for character — do " +
+      "not construct, edit, or retype the path yourself. In particular, the " +
+      "accession number segment must have no dashes; if you find yourself " +
+      "typing an accession number with dashes in it, you're not using the " +
+      "provided archiveUrl.",
     parametersJsonSchema: {
       type: "object",
       properties: {
         url: {
           type: "string",
-          description: "The exact archiveUrl string from get_filing_summary.",
+          description: "The exact archiveUrl string from get_company_snapshot.",
         },
       },
       required: ["url"],
@@ -22,12 +27,15 @@ export default {
   },
   async handle(ctx) {
     const url = String(ctx.input.url || "").trim();
-    if (!url.startsWith("/Archives/edgar/data/")) {
+    if (!ARCHIVE_URL_PATTERN.test(url)) {
       return {
         error: "invalid_url",
         message:
-          "url must be an archiveUrl copied verbatim from get_filing_summary's " +
-          "latest10K/latestDEF14A result, starting with /Archives/edgar/data/.",
+          "This url is not a valid archiveUrl — it must look exactly like " +
+          "/Archives/edgar/data/{digits}/{digits}/{filename}, with no dashes " +
+          "in the accession segment. Call get_company_snapshot again if needed " +
+          "and copy its latest10K.archiveUrl or latestDEF14A.archiveUrl " +
+          "verbatim instead of typing this path yourself.",
       };
     }
     const document = await ctx.request("sec-tickers", url);

@@ -68,13 +68,13 @@ export default {
       const accessionNoDashes = String(accessions[idx] || "").replace(/-/g, "");
       const primaryDocument = docs[idx];
       const archiveUrl = `/Archives/edgar/data/${cikNoZeros}/${accessionNoDashes}/${primaryDocument}`;
+      // Deliberately not returning accessionNumber/primaryDocument as separate
+      // fields — giving the model raw pieces invited it to reassemble the URL
+      // itself (with the dashed accessionNumber) instead of copying archiveUrl
+      // verbatim, which 404s. archiveUrl/documentUrl are the only paths out.
       return {
         filingDate: dates[idx],
-        accessionNumber: accessions[idx],
-        accessionNoDashes,
-        primaryDocument,
         archiveUrl,
-        // Absolute URL, ready to save as a source link — don't reassemble it.
         documentUrl: `https://www.sec.gov${archiveUrl}`,
       };
     }
