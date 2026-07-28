@@ -1,7 +1,7 @@
 {
   "name": "Default",
   "skills": ["Equity Research"],
-  "connections": ["sec-tickers", "sec-data", "yahoo-finance"],
+  "connections": ["sec-tickers", "sec-data"],
   "tools": ["get_company_snapshot", "fetch_filing_document"],
   "stores": {
     "company-profiles": "rw",

@@ -10,12 +10,11 @@ const RESEARCH_TIMEOUT_MS = 120_000;
 
 function buildPrompt(ticker) {
   return (
-    `Give me a full research profile for ${ticker}. Include: ` +
-    `company background/summary, most recent annual key financials ` +
-    `(revenue, net income, total assets, total liabilities, stockholders' equity, ` +
-    `diluted EPS, with fiscal year), current stock price, current strategy, ` +
-    `senior leadership (names and titles), and how they go to market / generate revenue. ` +
-    `Cite the source filings.`
+    `Give me a research profile for ${ticker}. Include: company background ` +
+    `(name, industry, any recent name/business change), most recent annual key ` +
+    `financials (revenue, net income, total assets, total liabilities, ` +
+    `stockholders' equity, diluted EPS, with fiscal year), and current stock ` +
+    `price with 52-week range. Cite the source filing.`
   );
 }
 
