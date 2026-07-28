@@ -6,7 +6,7 @@ Trigger: the user names a ticker, a public company, or asks to "research", "prof
 ## Behavior
 
 1. Identify the ticker or company name from the user's message.
-2. Load `GET /files/company_tickers.json` from `sec-tickers` (or reuse it if already loaded this session) and find the matching row to get the CIK. Zero-pad the CIK to 10 digits.
+2. Load `GET /files/company_tickers.json` from `sec-tickers` (or reuse it if already loaded this session) and find the matching row to get the CIK. Zero-pad the CIK so it is exactly 10 characters total (prepend `10 - digit_count` zeros — e.g. a 6-digit `cik_str` gets 4 leading zeros, a 7-digit one gets 3). Double-check the padded string is exactly 10 characters before calling `sec-data`; a wrong length will 404.
 3. Load `GET /submissions/CIK{cik10}.json` from `sec-data` to get the company name, industry (`sicDescription`), and filing history.
 4. Load `GET /api/xbrl/companyfacts/CIK{cik10}.json` from `sec-data` and pull the most recent annual (`form: "10-K"`, `fp: "FY"`) figures for revenue, net income, total assets, total liabilities, stockholders' equity, and diluted EPS. Note the fiscal year and period end date for each figure.
 5. From the submissions filing list, find the most recent `10-K` and the most recent `DEF 14A`. Fetch both documents via the `sec-tickers` Archives endpoint.

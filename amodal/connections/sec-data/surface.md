@@ -1,6 +1,6 @@
 # SEC EDGAR: Submissions & XBRL Financial Facts
 
-Structured data endpoints. All CIKs here must be zero-padded to 10 digits (e.g. `0000320193`).
+Structured data endpoints. All CIKs here must be zero-padded to **exactly 10 characters** (e.g. `0000320193`, not `000000320193`). See the zero-padding rule in the `sec-tickers` connection's surface doc — count the digits in the raw `cik_str` and prepend only enough zeros to reach 10 total characters. A wrong-length CIK 404s.
 
 - `GET /submissions/CIK{cik10}.json`: company profile plus filing history.
   - `name`, `sicDescription` (industry), `addresses`, `tickers`, `exchanges`, `fiscalYearEnd`, `formerNames`.
