@@ -74,7 +74,7 @@ export async function runResearchQuery(message, { onEvent, signal } = {}) {
           break;
         }
         case "widget":
-          widgets.push(evt.data ?? evt);
+          widgets.push({ widgetType: evt.widget_type, data: evt.data });
           break;
         default:
           break;

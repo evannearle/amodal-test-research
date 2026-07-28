@@ -1,0 +1,7 @@
+{
+  "endpoints": {
+    "GET /v8/finance/chart/{symbol}": {
+      "returns": ["PriceChart"]
+    }
+  }
+}

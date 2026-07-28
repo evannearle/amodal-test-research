@@ -1,0 +1,10 @@
+{
+  "baseUrl": "https://query1.finance.yahoo.com",
+  "format": "rest",
+  "testPath": "/v8/finance/chart/AAPL?range=1mo&interval=1d",
+  "auth": {
+    "type": "header",
+    "header": "User-Agent",
+    "token": "Mozilla/5.0 (compatible; AmodalResearchAgent/1.0)"
+  }
+}

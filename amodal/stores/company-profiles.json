@@ -28,6 +28,20 @@
       "total_liabilities_usd": { "type": "number", "nullable": true },
       "stockholders_equity_usd": { "type": "number", "nullable": true },
       "diluted_eps_usd": { "type": "number", "nullable": true },
+      "current_price": { "type": "number", "nullable": true },
+      "price_currency": { "type": "string", "nullable": true },
+      "fifty_two_week_high": { "type": "number", "nullable": true },
+      "fifty_two_week_low": { "type": "number", "nullable": true },
+      "price_history": {
+        "type": "array",
+        "item": {
+          "type": "object",
+          "fields": {
+            "date": { "type": "string" },
+            "close": { "type": "number" }
+          }
+        }
+      },
       "sources": {
         "type": "array",
         "item": { "type": "string" }

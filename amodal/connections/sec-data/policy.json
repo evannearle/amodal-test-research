@@ -1,8 +1,5 @@
 {
   "endpoints": {
-    "GET /api/xbrl/companyfacts/{cik}": {
-      "returns": ["CompanyFacts"]
-    },
     "GET /api/xbrl/companyconcept/{cik}/us-gaap/{tag}": {
       "returns": ["CompanyConcept"]
     }
