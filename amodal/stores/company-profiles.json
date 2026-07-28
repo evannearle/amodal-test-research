@@ -8,9 +8,25 @@
       "company_name": { "type": "string" },
       "cik": { "type": "string" },
       "industry": { "type": "string" },
+      "headquarters": { "type": "string", "nullable": true },
+      "employees": { "type": "string", "nullable": true },
+      "ceo_name": { "type": "string", "nullable": true },
       "summary": { "type": "string" },
       "strategy": { "type": "string" },
       "go_to_market": { "type": "string" },
+      "revenue_segments": {
+        "type": "array",
+        "item": {
+          "type": "object",
+          "fields": {
+            "segment": { "type": "string" },
+            "revenue_usd": { "type": "number", "nullable": true },
+            "percent_of_total": { "type": "number", "nullable": true },
+            "growth_rate": { "type": "string", "nullable": true },
+            "description": { "type": "string", "nullable": true }
+          }
+        }
+      },
       "leadership": {
         "type": "array",
         "item": {
@@ -29,6 +45,11 @@
       "total_liabilities_usd": { "type": "number", "nullable": true },
       "stockholders_equity_usd": { "type": "number", "nullable": true },
       "diluted_eps_usd": { "type": "number", "nullable": true },
+      "cash_usd": { "type": "number", "nullable": true },
+      "total_debt_usd": { "type": "number", "nullable": true },
+      "shares_outstanding": { "type": "number", "nullable": true },
+      "market_cap_usd": { "type": "number", "nullable": true },
+      "enterprise_value_usd": { "type": "number", "nullable": true },
       "current_price": { "type": "number", "nullable": true },
       "price_currency": { "type": "string", "nullable": true },
       "fifty_two_week_high": { "type": "number", "nullable": true },

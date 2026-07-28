@@ -7,13 +7,14 @@ export default {
     description:
       "Given a stock ticker or company name, resolves it and returns everything " +
       "needed for a financial profile in one call: CIK, company name, industry, " +
-      "former names, most recent annual financials (revenue, net income, assets, " +
-      "liabilities, equity, diluted EPS, fiscal year), current stock price, " +
-      "52-week range, ~6 months of daily closing prices, and the most recent " +
-      "10-K/DEF 14A filings, each with an archiveUrl (for fetch_filing_document) " +
-      "and a documentUrl (absolute sec.gov link — use this verbatim as the url " +
-      "when saving a source citation, don't reassemble it). Always use this " +
-      "single tool instead of loading " +
+      "headquarters, former names, most recent annual financials (revenue, net " +
+      "income, assets, liabilities, equity, diluted EPS, cash, total debt, fiscal " +
+      "year), valuation (shares outstanding, market cap, enterprise value), " +
+      "current stock price, 52-week range, ~6 months of daily closing prices, " +
+      "and the most recent 10-K/DEF 14A filings, each with an archiveUrl (for " +
+      "fetch_filing_document) and a documentUrl (absolute sec.gov link — use " +
+      "this verbatim as the url when saving a source citation, don't reassemble " +
+      "it). Always use this single tool instead of loading " +
       "company_tickers.json, submissions/CIK{cik}.json, or companyfacts yourself " +
       "— those are too large to scan reliably by reading.",
     parametersJsonSchema: {
@@ -82,10 +83,28 @@ export default {
     const latest10K = findFirst("10-K");
     const latestDEF14A = findFirst("DEF 14A");
 
+    const businessAddress = submissions?.addresses?.business;
+    const headquarters = businessAddress
+      ? [businessAddress.city, businessAddress.stateOrCountry].filter(Boolean).join(", ")
+      : null;
+
     let financials = null;
+    let sharesOutstanding = null;
     try {
       const facts = await ctx.request("sec-data", `/api/xbrl/companyfacts/CIK${cik10}.json`);
       const gaap = facts?.facts?.["us-gaap"] ?? {};
+      const dei = facts?.facts?.dei ?? {};
+
+      function mergedSeries(taxonomy, tags) {
+        const tagList = Array.isArray(tags) ? tags : [tags];
+        let combined = [];
+        for (const tag of tagList) {
+          const units = taxonomy[tag]?.units;
+          if (!units) continue;
+          combined = combined.concat(Object.values(units).flat());
+        }
+        return combined;
+      }
 
       // A company can switch which XBRL tag it reports a metric under (e.g.
       // after a merger or accounting standard change). Merge every candidate
@@ -93,18 +112,21 @@ export default {
       // picking the first tag that merely *exists* would silently prefer a
       // stale tag over a newer one under a different name.
       function latestAnnual(tags) {
-        const tagList = Array.isArray(tags) ? tags : [tags];
-        let combined = [];
-        for (const tag of tagList) {
-          const units = gaap[tag]?.units;
-          if (!units) continue;
-          combined = combined.concat(Object.values(units).flat());
-        }
+        const combined = mergedSeries(gaap, tags);
         if (!combined.length) return null;
         const annual = combined.filter((v) => v.form === "10-K" && v.fp === "FY");
         const pool = annual.length ? annual : combined;
         if (!pool.length) return null;
         return [...pool].sort((a, b) => (a.end < b.end ? 1 : -1))[0];
+      }
+
+      // Balance-sheet items (cash, debt, shares outstanding) are point-in-time
+      // "instant" facts, not annual totals — just take the single freshest
+      // value regardless of form/fiscal-period.
+      function mostRecentInstant(taxonomy, tags) {
+        const combined = mergedSeries(taxonomy, tags);
+        if (!combined.length) return null;
+        return [...combined].sort((a, b) => (a.end < b.end ? 1 : -1))[0];
       }
 
       const revenue = latestAnnual([
@@ -115,8 +137,22 @@ export default {
       const netIncome = latestAnnual("NetIncomeLoss");
       const assets = latestAnnual("Assets");
       const liabilities = latestAnnual("Liabilities");
-      const equity = latestAnnual(["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"]);
+      const equity = latestAnnual([
+        "StockholdersEquity",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+      ]);
       const eps = latestAnnual("EarningsPerShareDiluted");
+
+      const cash = mostRecentInstant(gaap, ["CashAndCashEquivalentsAtCarryingValue"]);
+      const debtNoncurrent = mostRecentInstant(gaap, ["LongTermDebtNoncurrent"]);
+      const debtCurrent = mostRecentInstant(gaap, ["LongTermDebtCurrent"]);
+      const shares = mostRecentInstant(dei, ["EntityCommonStockSharesOutstanding"]);
+      sharesOutstanding = shares?.val ?? null;
+
+      const totalDebtUsd =
+        debtNoncurrent?.val != null || debtCurrent?.val != null
+          ? (debtNoncurrent?.val ?? 0) + (debtCurrent?.val ?? 0)
+          : null;
 
       financials = {
         fiscalYear: revenue?.fy ?? netIncome?.fy ?? null,
@@ -127,6 +163,8 @@ export default {
         totalLiabilitiesUsd: liabilities?.val ?? null,
         stockholdersEquityUsd: equity?.val ?? null,
         dilutedEpsUsd: eps?.val ?? null,
+        cashUsd: cash?.val ?? null,
+        totalDebtUsd,
       };
     } catch (err) {
       ctx.log(`companyfacts fetch failed for ${cik10}: ${err}`);
@@ -160,6 +198,19 @@ export default {
       ctx.log(`price fetch failed for ${ticker}: ${err}`);
     }
 
+    let valuation = null;
+    if (price?.currentPrice != null && sharesOutstanding != null) {
+      const marketCapUsd = price.currentPrice * sharesOutstanding;
+      const hasDebtAndCash = financials?.totalDebtUsd != null && financials?.cashUsd != null;
+      valuation = {
+        sharesOutstanding,
+        marketCapUsd,
+        enterpriseValueUsd: hasDebtAndCash
+          ? marketCapUsd + financials.totalDebtUsd - financials.cashUsd
+          : null,
+      };
+    }
+
     return {
       found: true,
       ticker,
@@ -167,6 +218,7 @@ export default {
       cik10,
       name: submissions?.name ?? matched.title,
       sicDescription: submissions?.sicDescription ?? null,
+      headquarters,
       formerNames: (submissions?.formerNames ?? []).map((n) => ({
         name: n.name,
         from: n.from,
@@ -175,6 +227,7 @@ export default {
       latest10K,
       latestDEF14A,
       financials,
+      valuation,
       price,
     };
   },

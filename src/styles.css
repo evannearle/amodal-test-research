@@ -178,8 +178,34 @@ body {
 .dashboard-ticker {
   font-size: 2rem;
   font-weight: 700;
-  margin: 0 0 20px;
+  margin: 0 0 12px;
   letter-spacing: 0.02em;
+}
+
+.header-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.header-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.header-stat-label {
+  color: var(--text-muted);
+}
+
+.header-stat-value {
+  font-weight: 600;
 }
 
 .panel {
@@ -398,4 +424,125 @@ body {
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+/* Expandable cards */
+
+.expandable-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.expandable-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 24px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.expandable-header h3 {
+  margin: 0;
+}
+
+.expandable-chevron {
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.expandable-chevron.open {
+  transform: rotate(180deg);
+}
+
+.expandable-body {
+  padding: 0 24px 24px;
+}
+
+.expandable-body p:first-child {
+  margin-top: 0;
+}
+
+/* Revenue segments table */
+
+.segments-table-wrap {
+  overflow-x: auto;
+}
+
+.segments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.segments-table th,
+.segments-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.segments-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.segments-table th.sortable:hover {
+  color: var(--text);
+}
+
+.sort-arrow {
+  font-size: 0.7rem;
+}
+
+.segments-description {
+  white-space: normal;
+  min-width: 220px;
+  color: var(--text-muted);
+}
+
+.segments-note {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Mobile */
+
+@media (max-width: 640px) {
+  .dashboard {
+    padding: 16px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-ticker {
+    font-size: 1.5rem;
+  }
+
+  .info-card,
+  .expandable-header,
+  .expandable-body {
+    padding: 16px;
+  }
+
+  .info-card-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
 }

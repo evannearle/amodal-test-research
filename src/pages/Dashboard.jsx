@@ -1,30 +1,49 @@
 import { useEffect, useRef, useState } from "react";
 import { SearchBar } from "../components/SearchBar";
 import { PriceChart } from "../components/PriceChart";
+import { ExpandableCard } from "../components/ExpandableCard";
+import { RevenueSegmentsTable } from "../components/RevenueSegmentsTable";
 import { runResearchQuery } from "../lib/chat";
 import { fetchCompanyProfile } from "../lib/profile";
 import { MarkdownLite } from "../lib/markdownLite";
 import { formatUsd, formatPrice } from "../lib/format";
+import { METRIC_INFO } from "../lib/metricInfo";
 
 const RESEARCH_TIMEOUT_MS = 120_000;
 
 function buildPrompt(ticker) {
   return (
-    `Give me a full research profile for ${ticker}. Include: company background ` +
-    `(name, industry, any recent name/business change), most recent annual key ` +
-    `financials (revenue, net income, total assets, total liabilities, ` +
-    `stockholders' equity, diluted EPS, with fiscal year), current stock price ` +
-    `with 52-week range, current strategy, senior leadership with a short career ` +
-    `bio for each (prior roles, tenure, relevant background), and how they go to ` +
-    `market / generate revenue. Cite the source filings.`
+    `Give me a full factual research profile for ${ticker} — report what the ` +
+    `filings and market data say, no ratings, scores, or opinions. Include: ` +
+    `company background (name, industry, headquarters, employee count, any ` +
+    `recent name/business change), market cap and enterprise value, most ` +
+    `recent annual key financials (revenue, net income, total assets, total ` +
+    `liabilities, stockholders' equity, diluted EPS, cash, total debt, with ` +
+    `fiscal year), current stock price with 52-week range, revenue by segment ` +
+    `if disclosed, business description and strategy as stated in the filing, ` +
+    `senior leadership with a short career bio for each (prior roles, tenure, ` +
+    `relevant background), and how they go to market / generate revenue. Cite ` +
+    `the source filings.`
   );
 }
 
 function StatTile({ label, value }) {
+  const info = METRIC_INFO[label];
   return (
-    <div className="info-card-item">
+    <div className="info-card-item" title={info}>
       <div className="info-card-label">{label}</div>
       <div className="info-card-value">{value}</div>
+    </div>
+  );
+}
+
+function HeaderStat({ label, value }) {
+  if (value == null) return null;
+  const info = METRIC_INFO[label];
+  return (
+    <div className="header-stat" title={info}>
+      <span className="header-stat-label">{label}</span>
+      <span className="header-stat-value">{value}</span>
     </div>
   );
 }
@@ -160,7 +179,15 @@ export function Dashboard({ ticker, navigate }) {
         </div>
       </div>
 
-      <h1 className="dashboard-ticker">{ticker}</h1>
+      <h1 className="dashboard-ticker">
+        {profile?.company_name ? `${profile.company_name} (${ticker})` : ticker}
+        {profile?.current_price != null && (
+          <span className="price-headline">
+            {" "}
+            {formatPrice(profile.current_price, profile.price_currency)}
+          </span>
+        )}
+      </h1>
 
       {status === "unauthenticated" && (
         <div className="panel panel-warning">
@@ -213,16 +240,16 @@ export function Dashboard({ ticker, navigate }) {
 
       {status === "done" && profile && (
         <div className="results">
-          <div className="info-card">
-            <h3 className="info-card-title">
-              {profile.company_name ?? ticker}
-              {profile.current_price != null && (
-                <span className="price-headline">
-                  {" "}
-                  {formatPrice(profile.current_price, profile.price_currency)}
-                </span>
-              )}
-            </h3>
+          <div className="header-stats">
+            <HeaderStat label="Industry" value={profile.industry} />
+            <HeaderStat label="Headquarters" value={profile.headquarters} />
+            <HeaderStat label="CEO" value={profile.ceo_name} />
+            <HeaderStat label="Employees" value={profile.employees} />
+            <HeaderStat label="Market Cap" value={formatUsd(profile.market_cap_usd)} />
+            <HeaderStat label="Enterprise Value" value={formatUsd(profile.enterprise_value_usd)} />
+          </div>
+
+          <ExpandableCard title="Financials">
             <div className="info-card-grid">
               <StatTile label="Fiscal Year" value={profile.fiscal_year ?? "—"} />
               <StatTile label="Revenue" value={formatUsd(profile.revenue_usd)} />
@@ -231,6 +258,8 @@ export function Dashboard({ ticker, navigate }) {
               <StatTile label="Total Liabilities" value={formatUsd(profile.total_liabilities_usd)} />
               <StatTile label="Stockholders' Equity" value={formatUsd(profile.stockholders_equity_usd)} />
               <StatTile label="Diluted EPS" value={profile.diluted_eps_usd != null ? `$${profile.diluted_eps_usd}` : "—"} />
+              <StatTile label="Cash" value={formatUsd(profile.cash_usd)} />
+              <StatTile label="Total Debt" value={formatUsd(profile.total_debt_usd)} />
               {profile.fifty_two_week_high != null && (
                 <StatTile
                   label="52-Week Range"
@@ -238,32 +267,35 @@ export function Dashboard({ ticker, navigate }) {
                 />
               )}
             </div>
-          </div>
+          </ExpandableCard>
 
           {profile.price_history?.length > 1 && (
-            <div className="info-card">
-              <h3 className="info-card-title">Price History</h3>
+            <ExpandableCard title="Price History">
               <PriceChart history={profile.price_history} />
-            </div>
+            </ExpandableCard>
+          )}
+
+          {profile.revenue_segments?.length > 0 && (
+            <ExpandableCard title="Revenue by Segment">
+              <RevenueSegmentsTable segments={profile.revenue_segments} />
+              <p className="segments-note">As disclosed in the company's most recent 10-K.</p>
+            </ExpandableCard>
           )}
 
           {profile.summary && (
-            <div className="prose">
-              <h3>Background</h3>
+            <ExpandableCard title="Background">
               <MarkdownLite text={profile.summary} />
-            </div>
+            </ExpandableCard>
           )}
 
           {profile.strategy && (
-            <div className="prose">
-              <h3>Strategy</h3>
+            <ExpandableCard title="Strategy">
               <MarkdownLite text={profile.strategy} />
-            </div>
+            </ExpandableCard>
           )}
 
           {profile.leadership?.length > 0 && (
-            <div className="prose">
-              <h3>Senior Leadership</h3>
+            <ExpandableCard title="Senior Leadership">
               <ul className="leadership-list">
                 {profile.leadership.map((p, i) => (
                   <li key={i}>
@@ -274,19 +306,17 @@ export function Dashboard({ ticker, navigate }) {
                   </li>
                 ))}
               </ul>
-            </div>
+            </ExpandableCard>
           )}
 
           {profile.go_to_market && (
-            <div className="prose">
-              <h3>Go-To-Market</h3>
+            <ExpandableCard title="Go-To-Market">
               <MarkdownLite text={profile.go_to_market} />
-            </div>
+            </ExpandableCard>
           )}
 
           {profile.sources?.length > 0 && (
-            <div className="prose sources">
-              <h3>Sources</h3>
+            <ExpandableCard title="Sources" defaultOpen={false}>
               <ul className="prose-list">
                 {profile.sources.map((s, i) => {
                   // Older cached profiles saved sources as plain strings;
@@ -306,7 +336,7 @@ export function Dashboard({ ticker, navigate }) {
                   );
                 })}
               </ul>
-            </div>
+            </ExpandableCard>
           )}
         </div>
       )}

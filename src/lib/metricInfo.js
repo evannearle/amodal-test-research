@@ -1,0 +1,17 @@
+export const METRIC_INFO = {
+  "Fiscal Year": "The company's most recently reported annual fiscal period.",
+  Revenue: "Total sales reported for the fiscal year.",
+  "Net Income": "Profit remaining after all expenses, taxes, and costs.",
+  "Total Assets": "Everything the company owns, per its balance sheet.",
+  "Total Liabilities": "Everything the company owes, per its balance sheet.",
+  "Stockholders' Equity": "Assets minus liabilities — the company's book value.",
+  "Diluted EPS": "Net income per share, assuming all convertible securities are exercised.",
+  "52-Week Range": "The lowest and highest closing price over the past year.",
+  "Market Cap": "Share price × shares outstanding — the total value of all shares.",
+  "Enterprise Value": "Market cap plus total debt, minus cash — the theoretical takeover cost.",
+  Cash: "Cash and cash equivalents on the balance sheet.",
+  "Total Debt": "Sum of current and non-current long-term debt.",
+  Employees: "Employee count as stated in the company's most recent 10-K.",
+  Headquarters: "The company's principal executive office location on file with the SEC.",
+  Industry: "SEC's SIC (Standard Industrial Classification) code description for this company.",
+};
