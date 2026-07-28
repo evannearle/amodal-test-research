@@ -10,11 +10,13 @@ const RESEARCH_TIMEOUT_MS = 120_000;
 
 function buildPrompt(ticker) {
   return (
-    `Give me a research profile for ${ticker}. Include: company background ` +
+    `Give me a full research profile for ${ticker}. Include: company background ` +
     `(name, industry, any recent name/business change), most recent annual key ` +
     `financials (revenue, net income, total assets, total liabilities, ` +
-    `stockholders' equity, diluted EPS, with fiscal year), and current stock ` +
-    `price with 52-week range. Cite the source filing.`
+    `stockholders' equity, diluted EPS, with fiscal year), current stock price ` +
+    `with 52-week range, current strategy, senior leadership with a short career ` +
+    `bio for each (prior roles, tenure, relevant background), and how they go to ` +
+    `market / generate revenue. Cite the source filings.`
   );
 }
 
@@ -262,10 +264,13 @@ export function Dashboard({ ticker, navigate }) {
           {profile.leadership?.length > 0 && (
             <div className="prose">
               <h3>Senior Leadership</h3>
-              <ul className="prose-list">
+              <ul className="leadership-list">
                 {profile.leadership.map((p, i) => (
                   <li key={i}>
-                    <strong>{p.name}</strong> — {p.title}
+                    <div className="leadership-name">
+                      <strong>{p.name}</strong> — {p.title}
+                    </div>
+                    {p.bio && <div className="leadership-bio">{p.bio}</div>}
                   </li>
                 ))}
               </ul>

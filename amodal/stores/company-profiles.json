@@ -17,7 +17,8 @@
           "type": "object",
           "fields": {
             "name": { "type": "string" },
-            "title": { "type": "string" }
+            "title": { "type": "string" },
+            "bio": { "type": "string", "nullable": true }
           }
         }
       },

@@ -323,6 +323,34 @@ body {
   margin-bottom: 6px;
 }
 
+.leadership-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.leadership-list li {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.leadership-list li:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.leadership-name {
+  margin-bottom: 4px;
+}
+
+.leadership-bio {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
 .prose.sources {
   font-size: 0.85rem;
   color: var(--text-muted);

@@ -87,23 +87,35 @@ export default {
       const facts = await ctx.request("sec-data", `/api/xbrl/companyfacts/CIK${cik10}.json`);
       const gaap = facts?.facts?.["us-gaap"] ?? {};
 
-      function latestAnnual(tag) {
-        const units = gaap[tag]?.units;
-        if (!units) return null;
-        const series = Object.values(units).flat();
-        const annual = series.filter((v) => v.form === "10-K" && v.fp === "FY");
-        const pool = annual.length ? annual : series;
+      // A company can switch which XBRL tag it reports a metric under (e.g.
+      // after a merger or accounting standard change). Merge every candidate
+      // tag's series together and pick the globally most recent entry —
+      // picking the first tag that merely *exists* would silently prefer a
+      // stale tag over a newer one under a different name.
+      function latestAnnual(tags) {
+        const tagList = Array.isArray(tags) ? tags : [tags];
+        let combined = [];
+        for (const tag of tagList) {
+          const units = gaap[tag]?.units;
+          if (!units) continue;
+          combined = combined.concat(Object.values(units).flat());
+        }
+        if (!combined.length) return null;
+        const annual = combined.filter((v) => v.form === "10-K" && v.fp === "FY");
+        const pool = annual.length ? annual : combined;
         if (!pool.length) return null;
         return [...pool].sort((a, b) => (a.end < b.end ? 1 : -1))[0];
       }
 
-      const revenue =
-        latestAnnual("Revenues") ??
-        latestAnnual("RevenueFromContractWithCustomerExcludingAssessedTax");
+      const revenue = latestAnnual([
+        "Revenues",
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
+      ]);
       const netIncome = latestAnnual("NetIncomeLoss");
       const assets = latestAnnual("Assets");
       const liabilities = latestAnnual("Liabilities");
-      const equity = latestAnnual("StockholdersEquity");
+      const equity = latestAnnual(["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"]);
       const eps = latestAnnual("EarningsPerShareDiluted");
 
       financials = {
