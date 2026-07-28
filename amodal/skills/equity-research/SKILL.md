@@ -11,7 +11,7 @@ Trigger: the user names a ticker, a public company, or asks to "research", "prof
 4. Call the `get_filing_summary` tool with that `cik10` to get the company name, industry, former names, and the most recent 10-K and DEF 14A (accession number + primary document already resolved). This is the *only* way to get the filing list — never load `/submissions/CIK{cik}.json` yourself; a long-history company can have 700+ filings, too many to scan by reading.
    - If `formerNames` is non-empty and the most recent change is relatively recent, that's a signal the entity was reshaped (merger, reverse merger, spinoff) — call this out explicitly in your summary (e.g. "X became Y in <date>; financials below are from filings under the current business") rather than trying to reconcile old and new financials.
 5. Call `GET /api/xbrl/companyfacts/CIK{cik10}.json` from `sec-data` **once** and pull the most recent annual (`form: "10-K"`, `fp: "FY"`) figures for revenue, net income, total assets, total liabilities, stockholders' equity, and diluted EPS from that single response. Note the fiscal year and period end date for each figure. Do not call `companyconcept` per tag afterward — only fall back to a single `companyconcept` call for a specific tag if that tag is genuinely absent from `companyfacts`, and only once per missing tag.
-   - Fetch the `latest10K` and `latestDEF14A` documents from `get_filing_summary`'s result via the `sec-tickers` Archives endpoint, using their `accessionNoDashes` and `primaryDocument` fields directly.
+   - Fetch the `latest10K` and `latestDEF14A` documents by calling `fetch_filing_document` with the exact `archiveUrl` string from `get_filing_summary`'s result — don't construct the Archives path yourself.
    - From the 10-K, extract a concise business description and current strategy from Item 1 (Business) and Item 7 (MD&A).
    - From the DEF 14A, extract senior leadership (names and titles) and, if discussed, how the company generates revenue / goes to market.
 6. Compose the answer:
@@ -26,8 +26,8 @@ Trigger: the user names a ticker, a public company, or asks to "research", "prof
 
 ## Constraints
 
-- Use `lookup_cik` and `get_filing_summary` for every company lookup — never call `company_tickers.json` or `submissions/CIK{cik}.json` directly. Those raw endpoints return too much data to scan reliably and have caused wrong-CIK guessing in the past.
-- Stay efficient: `lookup_cik` once, `get_filing_summary` once, one `companyfacts` call, and one Archives fetch each for the 10-K and DEF 14A is enough for a full profile. If you notice you're about to repeat a call you've already made this pass for the same company, stop and answer with the best data you have instead of re-fetching.
+- Use `lookup_cik`, `get_filing_summary`, and `fetch_filing_document` for every company lookup — never call `company_tickers.json`, `submissions/CIK{cik}.json`, or a hand-built `Archives/...` path directly. Those have all caused unreliable guessing in the past; the tools return small, exact results.
+- Stay efficient: `lookup_cik` once, `get_filing_summary` once, one `companyfacts` call, and one `fetch_filing_document` call each for the 10-K and DEF 14A is enough for a full profile. If you notice you're about to repeat a call you've already made this pass for the same company, stop and answer with the best data you have instead of re-fetching.
 - Never invent financial figures, executive names, or strategy language that isn't backed by a filing you actually retrieved.
 - Always attribute facts to a specific filing (form type + filing date), not to "SEC records" in general.
 - If a 10-K or DEF 14A can't be loaded or doesn't contain the requested detail, say what's missing rather than filling the gap from general knowledge.

@@ -7,10 +7,11 @@ export default {
     description:
       "Given a zero-padded 10-digit CIK (from lookup_cik), fetch the company's " +
       "SEC filing history and return its name, industry, former names, and the " +
-      "most recent 10-K and DEF 14A filings (accession number + primary document, " +
-      "ready to fetch via the sec-tickers Archives endpoint). Always use this " +
-      "instead of loading /submissions/CIK{cik}.json yourself — a company with a " +
-      "long history can have 700+ filings, too many to reliably scan by reading.",
+      "most recent 10-K and DEF 14A filings, each with a ready-to-use archiveUrl. " +
+      "Pass that archiveUrl straight into fetch_filing_document — don't try to " +
+      "build the Archives URL yourself. Always use this instead of loading " +
+      "/submissions/CIK{cik}.json yourself — a company with a long history can " +
+      "have 700+ filings, too many to reliably scan by reading.",
     parametersJsonSchema: {
       type: "object",
       properties: {
@@ -32,14 +33,20 @@ export default {
     const accessions = recent.accessionNumber ?? [];
     const docs = recent.primaryDocument ?? [];
 
+    const cikNoZeros = String(Number(cik10));
+
     function findFirst(formName) {
       const idx = forms.findIndex((f) => f === formName);
       if (idx === -1) return null;
+      const accessionNoDashes = String(accessions[idx] || "").replace(/-/g, "");
+      const primaryDocument = docs[idx];
       return {
         filingDate: dates[idx],
         accessionNumber: accessions[idx],
-        accessionNoDashes: String(accessions[idx] || "").replace(/-/g, ""),
-        primaryDocument: docs[idx],
+        accessionNoDashes,
+        primaryDocument,
+        // Pass this directly to fetch_filing_document — don't reassemble it.
+        archiveUrl: `/Archives/edgar/data/${cikNoZeros}/${accessionNoDashes}/${primaryDocument}`,
       };
     }
 
