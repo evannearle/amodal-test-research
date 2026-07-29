@@ -484,7 +484,7 @@ export function Dashboard({ ticker, navigate }) {
           {profile.revenue_segments?.length > 0 && (
             <ExpandableCard title="Revenue by Segment">
               <RevenueSegmentsTable segments={profile.revenue_segments} />
-              <p className="segments-note">As disclosed in the company's most recent 10-K.</p>
+              <p className="segments-note">As disclosed in the company's most recent annual report (10-K or 20-F).</p>
             </ExpandableCard>
           )}
 
@@ -502,7 +502,7 @@ export function Dashboard({ ticker, navigate }) {
 
           {profile.risk_factors?.length > 0 && (
             <ExpandableCard title="Risk Factors" defaultOpen={false}>
-              <p className="segments-note">As disclosed in the company's most recent 10-K (Item 1A) — reported as stated, not ranked or scored.</p>
+              <p className="segments-note">As disclosed in the company's most recent annual report (Item 1A of a 10-K, or the equivalent risk factors item of a 20-F) — reported as stated, not ranked or scored.</p>
               <ul className="risk-list">
                 {profile.risk_factors.map((r, i) => (
                   <li key={i}>

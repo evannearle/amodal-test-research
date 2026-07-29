@@ -14,11 +14,18 @@ export default {
       "(shares outstanding, market cap, enterprise value, P/E, EV/EBITDA, " +
       "EV/Sales, P/S, P/B, dividend yield — all computed from the same fetched " +
       "figures, don't recompute them yourself), current stock price, 52-week " +
-      "range, ~6 months of daily closing prices, and the most recent 10-K/DEF " +
-      "14A filings, each with an archiveUrl (for fetch_filing_document) and a " +
-      "documentUrl (absolute sec.gov link — use this verbatim as the url when " +
-      "saving a source citation, don't reassemble it). Always use this single " +
-      "tool instead of loading company_tickers.json, submissions/CIK{cik}.json, " +
+      "range, ~6 months of daily closing prices, and the most recent annual " +
+      "report + proxy filing, each with an archiveUrl (for " +
+      "fetch_filing_document) and a documentUrl (absolute sec.gov link — use " +
+      "this verbatim as the url when saving a source citation, don't " +
+      "reassemble it). latest10K.formType is \"10-K\" for US filers or " +
+      "\"20-F\" for foreign private issuers (Shell, Unilever, etc., who never " +
+      "file a 10-K) — same idea, different item numbering, still readable " +
+      "with fetch_filing_document. latestDEF14A can legitimately be null for " +
+      "foreign filers that don't file a US-style proxy — that's normal, not " +
+      "missing data. Financials are read from whichever of US-GAAP or IFRS " +
+      "the company actually reports under. Always use this single tool " +
+      "instead of loading company_tickers.json, submissions/CIK{cik}.json, " +
       "or companyfacts yourself — those are too large to scan reliably by reading.",
     parametersJsonSchema: {
       type: "object",
@@ -66,24 +73,39 @@ export default {
     const accessions = recent.accessionNumber ?? [];
     const docs = recent.primaryDocument ?? [];
 
-    function findFirst(formName) {
-      const idx = forms.findIndex((f) => f === formName);
-      if (idx === -1) return null;
-      const accessionNoDashes = String(accessions[idx] || "").replace(/-/g, "");
-      const primaryDocument = docs[idx];
-      const archiveUrl = `/Archives/edgar/data/${cikNoZeros}/${accessionNoDashes}/${primaryDocument}`;
-      // Deliberately not returning accessionNumber/primaryDocument as separate
-      // fields — giving the model raw pieces invited it to reassemble the URL
-      // itself (with the dashed accessionNumber) instead of copying archiveUrl
-      // verbatim, which 404s. archiveUrl/documentUrl are the only paths out.
-      return {
-        filingDate: dates[idx],
-        archiveUrl,
-        documentUrl: `https://www.sec.gov${archiveUrl}`,
-      };
+    // formNames tried in order — lets the annual-report lookup fall back to
+    // 20-F (foreign private issuers file this instead of a 10-K and never
+    // have one).
+    function findFirst(formNames) {
+      const candidates = Array.isArray(formNames) ? formNames : [formNames];
+      for (const formName of candidates) {
+        const idx = forms.findIndex((f) => f === formName);
+        if (idx === -1) continue;
+        const accessionNoDashes = String(accessions[idx] || "").replace(/-/g, "");
+        const primaryDocument = docs[idx];
+        const archiveUrl = `/Archives/edgar/data/${cikNoZeros}/${accessionNoDashes}/${primaryDocument}`;
+        // Deliberately not returning accessionNumber/primaryDocument as
+        // separate fields — giving the model raw pieces invited it to
+        // reassemble the URL itself (with the dashed accessionNumber)
+        // instead of copying archiveUrl verbatim, which 404s. archiveUrl/
+        // documentUrl are the only paths out.
+        return {
+          formType: formName,
+          filingDate: dates[idx],
+          archiveUrl,
+          documentUrl: `https://www.sec.gov${archiveUrl}`,
+        };
+      }
+      return null;
     }
 
-    const latest10K = findFirst("10-K");
+    // 20-F is the annual report for foreign private issuers (e.g. Shell,
+    // Unilever) — they never file a 10-K. Its content covers the same ground
+    // (business, financial review, risk factors, leadership) under different
+    // item numbers; fetch_filing_document works the same way either way.
+    const latest10K = findFirst(["10-K", "20-F"]);
+    // Foreign private issuers often don't file a DEF 14A at all — that's
+    // normal, not an error; latestDEF14A can legitimately be null.
     const latestDEF14A = findFirst("DEF 14A");
 
     const businessAddress = submissions?.addresses?.business;
@@ -95,29 +117,40 @@ export default {
     let sharesOutstanding = null;
     try {
       const facts = await ctx.request("sec-data", `/api/xbrl/companyfacts/CIK${cik10}.json`);
+      // Foreign private issuers (Shell, Unilever, etc.) report under IFRS,
+      // not US-GAAP, and use different tag names for the same concepts —
+      // search both taxonomies for every metric below rather than assuming
+      // us-gaap.
       const gaap = facts?.facts?.["us-gaap"] ?? {};
+      const ifrs = facts?.facts?.["ifrs-full"] ?? {};
       const dei = facts?.facts?.dei ?? {};
 
-      function mergedSeries(taxonomy, tags) {
+      function mergedSeries(taxonomies, tags) {
+        const taxonomyList = Array.isArray(taxonomies) ? taxonomies : [taxonomies];
         const tagList = Array.isArray(tags) ? tags : [tags];
         let combined = [];
-        for (const tag of tagList) {
-          const units = taxonomy[tag]?.units;
-          if (!units) continue;
-          combined = combined.concat(Object.values(units).flat());
+        for (const taxonomy of taxonomyList) {
+          for (const tag of tagList) {
+            const units = taxonomy[tag]?.units;
+            if (!units) continue;
+            combined = combined.concat(Object.values(units).flat());
+          }
         }
         return combined;
       }
 
       // A company can switch which XBRL tag it reports a metric under (e.g.
-      // after a merger or accounting standard change). Merge every candidate
-      // tag's series together and pick the globally most recent entry —
-      // picking the first tag that merely *exists* would silently prefer a
-      // stale tag over a newer one under a different name.
+      // after a merger, an accounting standard change, or reporting under a
+      // different taxonomy). Merge every candidate tag's series together
+      // and pick the globally most recent entry — picking the first tag
+      // that merely *exists* would silently prefer a stale tag over a
+      // newer one under a different name.
       function latestAnnual(tags) {
-        const combined = mergedSeries(gaap, tags);
+        const combined = mergedSeries([gaap, ifrs], tags);
         if (!combined.length) return null;
-        const annual = combined.filter((v) => v.form === "10-K" && v.fp === "FY");
+        const annual = combined.filter(
+          (v) => (v.form === "10-K" || v.form === "20-F") && v.fp === "FY"
+        );
         const pool = annual.length ? annual : combined;
         if (!pool.length) return null;
         return [...pool].sort((a, b) => (a.end < b.end ? 1 : -1))[0];
@@ -126,28 +159,35 @@ export default {
       // Balance-sheet items (cash, debt, shares outstanding) are point-in-time
       // "instant" facts, not annual totals — just take the single freshest
       // value regardless of form/fiscal-period.
-      function mostRecentInstant(taxonomy, tags) {
-        const combined = mergedSeries(taxonomy, tags);
+      function mostRecentInstant(taxonomies, tags) {
+        const combined = mergedSeries(taxonomies, tags);
         if (!combined.length) return null;
         return [...combined].sort((a, b) => (a.end < b.end ? 1 : -1))[0];
       }
 
-      // Last N annual (10-K/FY) values for a metric, one per fiscal year
-      // (a company can restate a prior year, so dedupe by fy keeping the
-      // most recently filed value), oldest first — for trend/CAGR display.
+      // Last N annual (10-K/FY) values for a metric, one per fiscal year,
+      // oldest first — for trend/CAGR display. Group by the year in `end`
+      // (period end date), not the `fy` field: a single filing can report
+      // several comparative years (common for 20-F filers, which show 3
+      // years of income statement data per filing), all sharing one filing-
+      // level `fy` — grouping by that produced mislabeled and even
+      // wrongly-ordered years (verified against real Shell data). The period
+      // end date is the one thing that's always period-specific.
       function annualHistory(tags, maxYears = 5) {
-        const combined = mergedSeries(gaap, tags).filter(
-          (v) => v.form === "10-K" && v.fp === "FY" && v.fy != null
+        const combined = mergedSeries([gaap, ifrs], tags).filter(
+          (v) => (v.form === "10-K" || v.form === "20-F") && v.fp === "FY" && v.end
         );
         const byYear = new Map();
         for (const v of combined) {
-          const existing = byYear.get(v.fy);
-          if (!existing || (v.filed ?? "") > (existing.filed ?? "")) byYear.set(v.fy, v);
+          const year = Number(String(v.end).slice(0, 4));
+          if (!Number.isFinite(year)) continue;
+          const existing = byYear.get(year);
+          if (!existing || (v.filed ?? "") > (existing.filed ?? "")) byYear.set(year, v);
         }
-        return [...byYear.values()]
-          .sort((a, b) => a.fy - b.fy)
+        return [...byYear.entries()]
+          .sort((a, b) => a[0] - b[0])
           .slice(-maxYears)
-          .map((v) => ({ fiscalYear: v.fy, periodEnd: v.end, value: v.val }));
+          .map(([year, v]) => ({ fiscalYear: year, periodEnd: v.end, value: v.val }));
       }
 
       function cagr(history) {
@@ -163,33 +203,64 @@ export default {
         "Revenues",
         "RevenueFromContractWithCustomerExcludingAssessedTax",
         "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "Revenue", // IFRS
       ];
       const revenue = latestAnnual(revenueTags);
-      const netIncome = latestAnnual("NetIncomeLoss");
-      const assets = latestAnnual("Assets");
-      const liabilities = latestAnnual("Liabilities");
+      const netIncome = latestAnnual([
+        "NetIncomeLoss",
+        "ProfitLoss", // IFRS
+        "ProfitLossAttributableToOwnersOfParent", // IFRS
+      ]);
+      const assets = latestAnnual("Assets"); // same tag name in both taxonomies
+      const liabilities = latestAnnual("Liabilities"); // same tag name in both taxonomies
       const equity = latestAnnual([
         "StockholdersEquity",
         "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+        "Equity", // IFRS
+        "EquityAttributableToOwnersOfParent", // IFRS
       ]);
-      const epsTag = "EarningsPerShareDiluted";
-      const eps = latestAnnual(epsTag);
-      const operatingIncome = latestAnnual("OperatingIncomeLoss");
+      const epsTags = [
+        "EarningsPerShareDiluted",
+        "DilutedEarningsLossPerShareFromContinuingOperations", // IFRS
+      ];
+      const eps = latestAnnual(epsTags);
+      const operatingIncome = latestAnnual([
+        "OperatingIncomeLoss",
+        "ProfitLossFromOperatingActivities", // IFRS
+      ]);
       const depreciationAmortization = latestAnnual([
         "DepreciationDepletionAndAmortization",
         "DepreciationAmortizationAndAccretionNet",
         "DepreciationAndAmortization",
+        "DepreciationAndAmortisationExpense", // IFRS
       ]);
       const capex = latestAnnual("PaymentsToAcquirePropertyPlantAndEquipment");
-      const researchAndDevelopment = latestAnnual("ResearchAndDevelopmentExpense");
-      const sgAndA = latestAnnual("SellingGeneralAndAdministrativeExpense");
-      const stockBuybacks = latestAnnual("PaymentsForRepurchaseOfCommonStock");
-      const dividendsPaid = latestAnnual(["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"]);
-      const dividendPerShare = latestAnnual("CommonStockDividendsPerShareDeclared");
+      const researchAndDevelopment = latestAnnual("ResearchAndDevelopmentExpense"); // same tag name in both
+      const sgAndA = latestAnnual("SellingGeneralAndAdministrativeExpense"); // same tag name in both
+      const stockBuybacks = latestAnnual([
+        "PaymentsForRepurchaseOfCommonStock",
+        "PurchaseOfTreasuryShares", // IFRS
+      ]);
+      const dividendsPaid = latestAnnual([
+        "PaymentsOfDividendsCommonStock",
+        "PaymentsOfDividends",
+        "DividendsPaid", // IFRS
+        "DividendsPaidToEquityHoldersOfParentClassifiedAsFinancingActivities", // IFRS
+      ]);
+      const dividendPerShare = latestAnnual([
+        "CommonStockDividendsPerShareDeclared",
+        "DividendsPaidOrdinarySharesPerShare", // IFRS
+      ]);
 
-      const cash = mostRecentInstant(gaap, ["CashAndCashEquivalentsAtCarryingValue"]);
-      const debtNoncurrent = mostRecentInstant(gaap, ["LongTermDebtNoncurrent"]);
-      const debtCurrent = mostRecentInstant(gaap, ["LongTermDebtCurrent"]);
+      const cash = mostRecentInstant(
+        [gaap, ifrs],
+        ["CashAndCashEquivalentsAtCarryingValue", "CashAndCashEquivalents"]
+      );
+      const debtNoncurrent = mostRecentInstant([gaap, ifrs], ["LongTermDebtNoncurrent"]);
+      const debtCurrent = mostRecentInstant(
+        [gaap, ifrs],
+        ["LongTermDebtCurrent", "CurrentPortionOfLongtermBorrowings"]
+      );
       const shares = mostRecentInstant(dei, ["EntityCommonStockSharesOutstanding"]);
       sharesOutstanding = shares?.val ?? null;
 
@@ -205,7 +276,7 @@ export default {
 
       const revenueHistory = annualHistory(revenueTags);
       const netIncomeHistory = annualHistory(["NetIncomeLoss"]);
-      const epsHistory = annualHistory([epsTag]);
+      const epsHistory = annualHistory(epsTags);
 
       financials = {
         fiscalYear: revenue?.fy ?? netIncome?.fy ?? null,
