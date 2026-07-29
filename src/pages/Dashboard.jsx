@@ -101,6 +101,9 @@ export function Dashboard({ ticker, navigate }) {
     let controller = null;
     let tick = null;
     let timeout = null;
+    // Set by attemptResearch on a retryable outcome; read by run() once
+    // retries are exhausted to decide what to show.
+    let lastAttemptInfo = {};
 
     setStatus("loading");
     setToolGroups([]);
@@ -167,19 +170,18 @@ export function Dashboard({ ticker, navigate }) {
 
         if (fresh) {
           setProfile(fresh);
-        } else if (res.endReason === "budget_exceeded") {
-          setFallbackText(
-            "This company's filings needed more processing than the request budget allows, " +
-              "so the profile wasn't completed. This can happen on companies with unusually large " +
-              "filings. Try again — it may take a different path and complete within budget."
-          );
-        } else {
-          // Model finished but didn't save a structured profile — fall back
-          // to whatever prose it produced rather than showing nothing.
-          setFallbackText(res.text || "No profile data was returned.");
+          setStatus("done");
+          return "done";
         }
-        setStatus("done");
-        return "done";
+
+        // The model completed without saving a structured profile. This is
+        // non-deterministic — retrying the same company sometimes succeeds
+        // cleanly where the previous attempt didn't (observed directly: a
+        // failed META run followed immediately by a clean one). Worth an
+        // automatic retry via the same mechanism as a dropped connection,
+        // rather than making the user manually click "Try again."
+        lastAttemptInfo = { text: res.text, endReason: res.endReason };
+        return "retry";
       } catch (err) {
         if (runId !== runIdRef.current) return undefined;
         if (err.code === "UNAUTHENTICATED") {
@@ -204,7 +206,7 @@ export function Dashboard({ ticker, navigate }) {
             return "done";
           }
           if (isNetworkDrop) {
-            setErrorMessage(err.message ?? "Connection lost.");
+            lastAttemptInfo = { networkError: err.message ?? "Connection lost." };
             return "retry";
           }
           setStatus("timeout");
@@ -245,8 +247,23 @@ export function Dashboard({ ticker, navigate }) {
           setStatus("retrying");
           await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
           if (runId !== runIdRef.current) return;
-        } else {
+        } else if (lastAttemptInfo.endReason === "budget_exceeded") {
+          setFallbackText(
+            "This company's filings needed more processing than the request budget allows, " +
+              "across multiple attempts. Try asking a narrower question (e.g. just financials)."
+          );
+          setStatus("done");
+        } else if (lastAttemptInfo.text) {
+          // Never fully structured, but real content was produced at least
+          // once — show it rather than a bare error.
+          setFallbackText(lastAttemptInfo.text);
+          setStatus("done");
+        } else if (lastAttemptInfo.networkError) {
+          setErrorMessage(lastAttemptInfo.networkError);
           setStatus("error");
+        } else {
+          setFallbackText("No profile data was returned after multiple attempts.");
+          setStatus("done");
         }
       }
     }
@@ -298,7 +315,7 @@ export function Dashboard({ ticker, navigate }) {
 
       {status === "retrying" && (
         <div className="panel panel-warning">
-          <p>Connection dropped ({errorMessage}) — retrying automatically…</p>
+          <p>Didn't complete cleanly — retrying automatically…</p>
         </div>
       )}
 
