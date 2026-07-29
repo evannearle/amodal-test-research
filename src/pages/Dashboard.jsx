@@ -21,6 +21,11 @@ const MAX_SESSION_TOKENS = 400_000;
 const HANG_SAFETY_MS = 10 * 60_000;
 const POLL_ATTEMPTS = 6;
 const POLL_INTERVAL_MS = 5000;
+// A dropped connection ("Failed to fetch" — a raw network error, not an HTTP
+// status) is often transient (a proxy hiccup, momentary contention on the
+// backend). Retry automatically before asking the user to do it by hand.
+const MAX_NETWORK_RETRIES = 2;
+const RETRY_DELAY_MS = 4000;
 
 // The client giving up (timeout, dropped connection) doesn't stop the
 // server-side research turn — it keeps running and often finishes and saves
@@ -91,7 +96,9 @@ export function Dashboard({ ticker, navigate }) {
 
   useEffect(() => {
     const runId = ++runIdRef.current;
-    const controller = new AbortController();
+    // Reassigned each retry attempt; the unmount/ticker-change cleanup below
+    // always needs to reach the *current* attempt's controller and timers.
+    let controller = null;
     let tick = null;
     let timeout = null;
 
@@ -102,26 +109,19 @@ export function Dashboard({ ticker, navigate }) {
     setErrorMessage(null);
     setElapsedSeconds(0);
 
-    async function run() {
-      // Fast path: already-researched companies are served straight from the
-      // store, no chat round-trip needed.
-      try {
-        const cached = await fetchCompanyProfile(ticker);
-        if (runId !== runIdRef.current) return;
-        if (cached) {
-          setProfile(cached);
-          setStatus("done");
-          return;
-        }
-      } catch (err) {
-        if (runId !== runIdRef.current) return;
-        if (err.code === "UNAUTHENTICATED") {
-          setStatus("unauthenticated");
-          return;
-        }
-        // otherwise fall through and try research anyway
-      }
+    // Runs one research attempt. Returns "done" (terminal, caller should
+    // stop), "retry" (a transient network drop — caller may try again), or
+    // undefined if this run was superseded (ticker changed / unmounted).
+    async function attemptResearch() {
+      // Clear the previous attempt's timers before starting a new one — each
+      // retry otherwise leaks an interval/timeout from the attempt before it.
+      clearInterval(tick);
+      clearTimeout(timeout);
 
+      controller = new AbortController();
+      setStatus("loading");
+      setToolGroups([]);
+      setErrorMessage(null);
       const startedAt = Date.now();
       tick = setInterval(() => {
         setElapsedSeconds(Math.round((Date.now() - startedAt) / 1000));
@@ -160,10 +160,10 @@ export function Dashboard({ ticker, navigate }) {
           },
         });
 
-        if (runId !== runIdRef.current) return;
+        if (runId !== runIdRef.current) return undefined;
 
         const fresh = await fetchCompanyProfile(ticker);
-        if (runId !== runIdRef.current) return;
+        if (runId !== runIdRef.current) return undefined;
 
         if (fresh) {
           setProfile(fresh);
@@ -179,11 +179,12 @@ export function Dashboard({ ticker, navigate }) {
           setFallbackText(res.text || "No profile data was returned.");
         }
         setStatus("done");
+        return "done";
       } catch (err) {
-        if (runId !== runIdRef.current) return;
+        if (runId !== runIdRef.current) return undefined;
         if (err.code === "UNAUTHENTICATED") {
           setStatus("unauthenticated");
-          return;
+          return "done";
         }
 
         // The client giving up (timeout or a dropped connection) doesn't mean
@@ -196,18 +197,57 @@ export function Dashboard({ ticker, navigate }) {
         if (isTimeout || isNetworkDrop) {
           setStatus("finishing");
           const found = await pollForProfile(ticker, runId, runIdRef);
-          if (runId !== runIdRef.current) return;
+          if (runId !== runIdRef.current) return undefined;
           if (found) {
             setProfile(found);
             setStatus("done");
-            return;
+            return "done";
           }
-          setStatus(isTimeout ? "timeout" : "error");
-          if (isNetworkDrop) setErrorMessage(err.message ?? "Connection lost.");
-          return;
+          if (isNetworkDrop) {
+            setErrorMessage(err.message ?? "Connection lost.");
+            return "retry";
+          }
+          setStatus("timeout");
+          return "done";
         }
 
         // Anything else here is an AbortError from navigating away — ignore.
+        return "done";
+      }
+    }
+
+    async function run() {
+      // Fast path: already-researched companies are served straight from the
+      // store, no chat round-trip needed.
+      try {
+        const cached = await fetchCompanyProfile(ticker);
+        if (runId !== runIdRef.current) return;
+        if (cached) {
+          setProfile(cached);
+          setStatus("done");
+          return;
+        }
+      } catch (err) {
+        if (runId !== runIdRef.current) return;
+        if (err.code === "UNAUTHENTICATED") {
+          setStatus("unauthenticated");
+          return;
+        }
+        // otherwise fall through and try research anyway
+      }
+
+      for (let attempt = 0; attempt <= MAX_NETWORK_RETRIES; attempt++) {
+        const outcome = await attemptResearch();
+        if (outcome !== "retry") return; // done, or superseded
+        if (runId !== runIdRef.current) return;
+
+        if (attempt < MAX_NETWORK_RETRIES) {
+          setStatus("retrying");
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          if (runId !== runIdRef.current) return;
+        } else {
+          setStatus("error");
+        }
       }
     }
 
@@ -219,7 +259,7 @@ export function Dashboard({ ticker, navigate }) {
     return () => {
       clearInterval(tick);
       clearTimeout(timeout);
-      controller.abort();
+      controller?.abort();
     };
   }, [ticker]);
 
@@ -256,9 +296,17 @@ export function Dashboard({ ticker, navigate }) {
         </div>
       )}
 
+      {status === "retrying" && (
+        <div className="panel panel-warning">
+          <p>Connection dropped ({errorMessage}) — retrying automatically…</p>
+        </div>
+      )}
+
       {status === "error" && (
         <div className="panel panel-error">
-          <p>Couldn't complete this research request: {errorMessage}</p>
+          <p>
+            Couldn't complete this research request after retrying: {errorMessage}
+          </p>
           <button className="button" onClick={() => navigate(`/company/${ticker}`)}>
             Try again
           </button>
