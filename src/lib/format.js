@@ -12,3 +12,13 @@ export function formatPrice(value, currency) {
   const symbol = currency === "USD" || !currency ? "$" : `${currency} `;
   return `${symbol}${value.toFixed(2)}`;
 }
+
+export function formatPercent(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
+export function formatRatio(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return `${value.toFixed(digits)}×`;
+}

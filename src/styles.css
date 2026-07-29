@@ -546,3 +546,90 @@ body {
     gap: 12px;
   }
 }
+
+/* Trend tables */
+
+.trend-block {
+  margin-bottom: 20px;
+}
+
+.trend-block:last-child {
+  margin-bottom: 0;
+}
+
+.trend-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.trend-label {
+  font-weight: 600;
+}
+
+.trend-cagr {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.trend-cagr.up {
+  color: var(--primary);
+}
+
+.trend-cagr.down {
+  color: var(--danger);
+}
+
+.trend-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.trend-year {
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 10px 8px;
+}
+
+.trend-year-value {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.trend-year-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Risk factors */
+
+.risk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.risk-list li {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.risk-list li:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.risk-list p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}

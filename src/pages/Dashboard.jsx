@@ -3,10 +3,11 @@ import { SearchBar } from "../components/SearchBar";
 import { PriceChart } from "../components/PriceChart";
 import { ExpandableCard } from "../components/ExpandableCard";
 import { RevenueSegmentsTable } from "../components/RevenueSegmentsTable";
+import { TrendTable } from "../components/TrendTable";
 import { runResearchQuery } from "../lib/chat";
 import { fetchCompanyProfile } from "../lib/profile";
 import { MarkdownLite } from "../lib/markdownLite";
-import { formatUsd, formatPrice } from "../lib/format";
+import { formatUsd, formatPrice, formatPercent, formatRatio } from "../lib/format";
 import { METRIC_INFO } from "../lib/metricInfo";
 
 // No fixed time budget for a normal research pass — reading two full filings
@@ -43,12 +44,16 @@ function buildPrompt(ticker) {
     `Give me a full factual research profile for ${ticker} — report what the ` +
     `filings and market data say, no ratings, scores, or opinions. Include: ` +
     `company background (name, industry, headquarters, employee count, any ` +
-    `recent name/business change), market cap and enterprise value, most ` +
+    `recent name/business change), valuation (market cap, enterprise value, ` +
+    `P/E, EV/EBITDA, EV/Sales, price/sales, price/book, dividend yield), most ` +
     `recent annual key financials (revenue, net income, total assets, total ` +
-    `liabilities, stockholders' equity, diluted EPS, cash, total debt, with ` +
-    `fiscal year), current stock price with 52-week range, revenue by segment ` +
-    `if disclosed, business description and strategy as stated in the filing, ` +
-    `senior leadership with a short career bio for each (prior roles, tenure, ` +
+    `liabilities, stockholders' equity, diluted EPS, EBITDA, cash, total debt, ` +
+    `with fiscal year), 5-year trend and CAGR for revenue, net income, and ` +
+    `EPS where available, capital allocation (capex, R&D, SG&A, stock ` +
+    `buybacks, dividends paid), current stock price with 52-week range, ` +
+    `revenue by segment if disclosed, business description and strategy as ` +
+    `stated in the filing, risk factors as disclosed (not scored), senior ` +
+    `leadership with a short career bio for each (prior roles, tenure, ` +
     `relevant background), and how they go to market / generate revenue. Cite ` +
     `the source filings.`
   );
@@ -322,11 +327,76 @@ export function Dashboard({ ticker, navigate }) {
             </div>
           </ExpandableCard>
 
+          {(profile.pe_ratio != null ||
+            profile.ev_to_ebitda != null ||
+            profile.ev_to_sales != null ||
+            profile.price_to_sales_ratio != null ||
+            profile.price_to_book_ratio != null ||
+            profile.dividend_yield != null) && (
+            <ExpandableCard title="Valuation">
+              <div className="info-card-grid">
+                <StatTile label="P/E Ratio" value={formatRatio(profile.pe_ratio)} />
+                <StatTile label="EV/EBITDA" value={formatRatio(profile.ev_to_ebitda)} />
+                <StatTile label="EV/Sales" value={formatRatio(profile.ev_to_sales)} />
+                <StatTile label="Price/Sales" value={formatRatio(profile.price_to_sales_ratio)} />
+                <StatTile label="Price/Book" value={formatRatio(profile.price_to_book_ratio)} />
+                <StatTile label="Dividend Yield" value={formatPercent(profile.dividend_yield)} />
+                <StatTile label="EBITDA" value={formatUsd(profile.ebitda_usd)} />
+              </div>
+            </ExpandableCard>
+          )}
+
           {profile.price_history?.length > 1 && (
             <ExpandableCard title="Price History">
               <PriceChart history={profile.price_history} />
             </ExpandableCard>
           )}
+
+          {(profile.revenue_history?.length > 0 ||
+            profile.net_income_history?.length > 0 ||
+            profile.eps_history?.length > 0) && (
+            <ExpandableCard title="5-Year Trends">
+              <TrendTable
+                label="Revenue"
+                history={profile.revenue_history}
+                cagr={profile.revenue_cagr}
+                formatValue={formatUsd}
+              />
+              <TrendTable
+                label="Net Income"
+                history={profile.net_income_history}
+                cagr={profile.net_income_cagr}
+                formatValue={formatUsd}
+              />
+              <TrendTable
+                label="Diluted EPS"
+                history={profile.eps_history}
+                cagr={profile.eps_cagr}
+                formatValue={(v) => `$${v.toFixed(2)}`}
+              />
+            </ExpandableCard>
+          )}
+
+          {profile.capital_allocation &&
+            Object.values(profile.capital_allocation).some((v) => v != null) && (
+              <ExpandableCard title="Capital Allocation">
+                <div className="info-card-grid">
+                  <StatTile label="CapEx" value={formatUsd(profile.capital_allocation.capex_usd)} />
+                  <StatTile label="R&D" value={formatUsd(profile.capital_allocation.research_and_development_usd)} />
+                  <StatTile label="SG&A" value={formatUsd(profile.capital_allocation.selling_general_and_administrative_usd)} />
+                  <StatTile label="Stock Buybacks" value={formatUsd(profile.capital_allocation.stock_buybacks_usd)} />
+                  <StatTile label="Dividends Paid" value={formatUsd(profile.capital_allocation.dividends_paid_usd)} />
+                  <StatTile
+                    label="Dividend Per Share"
+                    value={
+                      profile.capital_allocation.dividend_per_share_usd != null
+                        ? `$${profile.capital_allocation.dividend_per_share_usd}`
+                        : "—"
+                    }
+                  />
+                </div>
+              </ExpandableCard>
+            )}
 
           {profile.revenue_segments?.length > 0 && (
             <ExpandableCard title="Revenue by Segment">
@@ -344,6 +414,20 @@ export function Dashboard({ ticker, navigate }) {
           {profile.strategy && (
             <ExpandableCard title="Strategy">
               <MarkdownLite text={profile.strategy} />
+            </ExpandableCard>
+          )}
+
+          {profile.risk_factors?.length > 0 && (
+            <ExpandableCard title="Risk Factors" defaultOpen={false}>
+              <p className="segments-note">As disclosed in the company's most recent 10-K (Item 1A) — reported as stated, not ranked or scored.</p>
+              <ul className="risk-list">
+                {profile.risk_factors.map((r, i) => (
+                  <li key={i}>
+                    <strong>{r.category}</strong>
+                    <p>{r.summary}</p>
+                  </li>
+                ))}
+              </ul>
             </ExpandableCard>
           )}
 

@@ -47,9 +47,71 @@
       "diluted_eps_usd": { "type": "number", "nullable": true },
       "cash_usd": { "type": "number", "nullable": true },
       "total_debt_usd": { "type": "number", "nullable": true },
+      "ebitda_usd": { "type": "number", "nullable": true },
       "shares_outstanding": { "type": "number", "nullable": true },
       "market_cap_usd": { "type": "number", "nullable": true },
       "enterprise_value_usd": { "type": "number", "nullable": true },
+      "pe_ratio": { "type": "number", "nullable": true },
+      "price_to_sales_ratio": { "type": "number", "nullable": true },
+      "price_to_book_ratio": { "type": "number", "nullable": true },
+      "ev_to_ebitda": { "type": "number", "nullable": true },
+      "ev_to_sales": { "type": "number", "nullable": true },
+      "dividend_yield": { "type": "number", "nullable": true },
+      "capital_allocation": {
+        "type": "object",
+        "nullable": true,
+        "fields": {
+          "capex_usd": { "type": "number", "nullable": true },
+          "research_and_development_usd": { "type": "number", "nullable": true },
+          "selling_general_and_administrative_usd": { "type": "number", "nullable": true },
+          "stock_buybacks_usd": { "type": "number", "nullable": true },
+          "dividends_paid_usd": { "type": "number", "nullable": true },
+          "dividend_per_share_usd": { "type": "number", "nullable": true }
+        }
+      },
+      "revenue_history": {
+        "type": "array",
+        "item": {
+          "type": "object",
+          "fields": {
+            "fiscal_year": { "type": "number" },
+            "value": { "type": "number" }
+          }
+        }
+      },
+      "net_income_history": {
+        "type": "array",
+        "item": {
+          "type": "object",
+          "fields": {
+            "fiscal_year": { "type": "number" },
+            "value": { "type": "number" }
+          }
+        }
+      },
+      "eps_history": {
+        "type": "array",
+        "item": {
+          "type": "object",
+          "fields": {
+            "fiscal_year": { "type": "number" },
+            "value": { "type": "number" }
+          }
+        }
+      },
+      "revenue_cagr": { "type": "number", "nullable": true },
+      "net_income_cagr": { "type": "number", "nullable": true },
+      "eps_cagr": { "type": "number", "nullable": true },
+      "risk_factors": {
+        "type": "array",
+        "item": {
+          "type": "object",
+          "fields": {
+            "category": { "type": "string" },
+            "summary": { "type": "string" }
+          }
+        }
+      },
       "current_price": { "type": "number", "nullable": true },
       "price_currency": { "type": "string", "nullable": true },
       "fifty_two_week_high": { "type": "number", "nullable": true },

@@ -8,15 +8,18 @@ export default {
       "Given a stock ticker or company name, resolves it and returns everything " +
       "needed for a financial profile in one call: CIK, company name, industry, " +
       "headquarters, former names, most recent annual financials (revenue, net " +
-      "income, assets, liabilities, equity, diluted EPS, cash, total debt, fiscal " +
-      "year), valuation (shares outstanding, market cap, enterprise value), " +
-      "current stock price, 52-week range, ~6 months of daily closing prices, " +
-      "and the most recent 10-K/DEF 14A filings, each with an archiveUrl (for " +
-      "fetch_filing_document) and a documentUrl (absolute sec.gov link — use " +
-      "this verbatim as the url when saving a source citation, don't reassemble " +
-      "it). Always use this single tool instead of loading " +
-      "company_tickers.json, submissions/CIK{cik}.json, or companyfacts yourself " +
-      "— those are too large to scan reliably by reading.",
+      "income, assets, liabilities, equity, diluted EPS, EBITDA, cash, total " +
+      "debt, fiscal year), capital allocation (capex, R&D, SG&A, buybacks, " +
+      "dividends), 5-year history + CAGR for revenue/net income/EPS, valuation " +
+      "(shares outstanding, market cap, enterprise value, P/E, EV/EBITDA, " +
+      "EV/Sales, P/S, P/B, dividend yield — all computed from the same fetched " +
+      "figures, don't recompute them yourself), current stock price, 52-week " +
+      "range, ~6 months of daily closing prices, and the most recent 10-K/DEF " +
+      "14A filings, each with an archiveUrl (for fetch_filing_document) and a " +
+      "documentUrl (absolute sec.gov link — use this verbatim as the url when " +
+      "saving a source citation, don't reassemble it). Always use this single " +
+      "tool instead of loading company_tickers.json, submissions/CIK{cik}.json, " +
+      "or companyfacts yourself — those are too large to scan reliably by reading.",
     parametersJsonSchema: {
       type: "object",
       properties: {
@@ -129,11 +132,39 @@ export default {
         return [...combined].sort((a, b) => (a.end < b.end ? 1 : -1))[0];
       }
 
-      const revenue = latestAnnual([
+      // Last N annual (10-K/FY) values for a metric, one per fiscal year
+      // (a company can restate a prior year, so dedupe by fy keeping the
+      // most recently filed value), oldest first — for trend/CAGR display.
+      function annualHistory(tags, maxYears = 5) {
+        const combined = mergedSeries(gaap, tags).filter(
+          (v) => v.form === "10-K" && v.fp === "FY" && v.fy != null
+        );
+        const byYear = new Map();
+        for (const v of combined) {
+          const existing = byYear.get(v.fy);
+          if (!existing || (v.filed ?? "") > (existing.filed ?? "")) byYear.set(v.fy, v);
+        }
+        return [...byYear.values()]
+          .sort((a, b) => a.fy - b.fy)
+          .slice(-maxYears)
+          .map((v) => ({ fiscalYear: v.fy, periodEnd: v.end, value: v.val }));
+      }
+
+      function cagr(history) {
+        if (history.length < 2) return null;
+        const first = history[0];
+        const last = history[history.length - 1];
+        const years = last.fiscalYear - first.fiscalYear;
+        if (years <= 0 || first.value <= 0 || last.value <= 0) return null;
+        return Math.pow(last.value / first.value, 1 / years) - 1;
+      }
+
+      const revenueTags = [
         "Revenues",
         "RevenueFromContractWithCustomerExcludingAssessedTax",
         "RevenueFromContractWithCustomerIncludingAssessedTax",
-      ]);
+      ];
+      const revenue = latestAnnual(revenueTags);
       const netIncome = latestAnnual("NetIncomeLoss");
       const assets = latestAnnual("Assets");
       const liabilities = latestAnnual("Liabilities");
@@ -141,7 +172,20 @@ export default {
         "StockholdersEquity",
         "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
       ]);
-      const eps = latestAnnual("EarningsPerShareDiluted");
+      const epsTag = "EarningsPerShareDiluted";
+      const eps = latestAnnual(epsTag);
+      const operatingIncome = latestAnnual("OperatingIncomeLoss");
+      const depreciationAmortization = latestAnnual([
+        "DepreciationDepletionAndAmortization",
+        "DepreciationAmortizationAndAccretionNet",
+        "DepreciationAndAmortization",
+      ]);
+      const capex = latestAnnual("PaymentsToAcquirePropertyPlantAndEquipment");
+      const researchAndDevelopment = latestAnnual("ResearchAndDevelopmentExpense");
+      const sgAndA = latestAnnual("SellingGeneralAndAdministrativeExpense");
+      const stockBuybacks = latestAnnual("PaymentsForRepurchaseOfCommonStock");
+      const dividendsPaid = latestAnnual(["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"]);
+      const dividendPerShare = latestAnnual("CommonStockDividendsPerShareDeclared");
 
       const cash = mostRecentInstant(gaap, ["CashAndCashEquivalentsAtCarryingValue"]);
       const debtNoncurrent = mostRecentInstant(gaap, ["LongTermDebtNoncurrent"]);
@@ -154,6 +198,15 @@ export default {
           ? (debtNoncurrent?.val ?? 0) + (debtCurrent?.val ?? 0)
           : null;
 
+      const ebitdaUsd =
+        operatingIncome?.val != null
+          ? operatingIncome.val + (depreciationAmortization?.val ?? 0)
+          : null;
+
+      const revenueHistory = annualHistory(revenueTags);
+      const netIncomeHistory = annualHistory(["NetIncomeLoss"]);
+      const epsHistory = annualHistory([epsTag]);
+
       financials = {
         fiscalYear: revenue?.fy ?? netIncome?.fy ?? null,
         periodEnd: revenue?.end ?? netIncome?.end ?? null,
@@ -165,6 +218,23 @@ export default {
         dilutedEpsUsd: eps?.val ?? null,
         cashUsd: cash?.val ?? null,
         totalDebtUsd,
+        ebitdaUsd,
+        capitalAllocation: {
+          capExUsd: capex?.val ?? null,
+          researchAndDevelopmentUsd: researchAndDevelopment?.val ?? null,
+          sellingGeneralAndAdministrativeUsd: sgAndA?.val ?? null,
+          stockBuybacksUsd: stockBuybacks?.val ?? null,
+          dividendsPaidUsd: dividendsPaid?.val ?? null,
+          dividendPerShareUsd: dividendPerShare?.val ?? null,
+        },
+        trends: {
+          revenueHistory,
+          netIncomeHistory,
+          epsHistory,
+          revenueCagr: cagr(revenueHistory),
+          netIncomeCagr: cagr(netIncomeHistory),
+          epsCagr: cagr(epsHistory),
+        },
       };
     } catch (err) {
       ctx.log(`companyfacts fetch failed for ${cik10}: ${err}`);
@@ -202,12 +272,30 @@ export default {
     if (price?.currentPrice != null && sharesOutstanding != null) {
       const marketCapUsd = price.currentPrice * sharesOutstanding;
       const hasDebtAndCash = financials?.totalDebtUsd != null && financials?.cashUsd != null;
+      const enterpriseValueUsd = hasDebtAndCash
+        ? marketCapUsd + financials.totalDebtUsd - financials.cashUsd
+        : null;
+
+      const eps = financials?.dilutedEpsUsd;
+      const revenue = financials?.revenueUsd;
+      const equity = financials?.stockholdersEquityUsd;
+      const ebitda = financials?.ebitdaUsd;
+      const dividendPerShare = financials?.capitalAllocation?.dividendPerShareUsd;
+
       valuation = {
         sharesOutstanding,
         marketCapUsd,
-        enterpriseValueUsd: hasDebtAndCash
-          ? marketCapUsd + financials.totalDebtUsd - financials.cashUsd
-          : null,
+        enterpriseValueUsd,
+        // Simple ratios computed from figures already fetched above — no
+        // interpretation, just arithmetic. null when an input is missing or
+        // a ratio would be nonsensical (e.g. negative-earnings P/E).
+        peRatio: eps > 0 ? price.currentPrice / eps : null,
+        priceToSalesRatio: revenue > 0 ? marketCapUsd / revenue : null,
+        priceToBookRatio: equity > 0 ? marketCapUsd / equity : null,
+        evToEbitda: enterpriseValueUsd != null && ebitda > 0 ? enterpriseValueUsd / ebitda : null,
+        evToSales: enterpriseValueUsd != null && revenue > 0 ? enterpriseValueUsd / revenue : null,
+        dividendYield:
+          dividendPerShare > 0 ? dividendPerShare / price.currentPrice : null,
       };
     }
 
