@@ -224,7 +224,11 @@ export function Dashboard({ ticker, navigate }) {
       try {
         const cached = await fetchCompanyProfile(ticker);
         if (runId !== runIdRef.current) return;
-        if (cached) {
+        // profile_complete === false means only the core (financials/
+        // valuation/price) was saved before enrichment ran or was
+        // interrupted — treat it like a cache miss so the skill finishes
+        // the job, rather than showing a permanently-partial profile.
+        if (cached && cached.profile_complete !== false) {
           setProfile(cached);
           setStatus("done");
           return;
@@ -369,6 +373,14 @@ export function Dashboard({ ticker, navigate }) {
 
       {status === "done" && profile && (
         <div className="results">
+          {profile.profile_complete === false && (
+            <div className="panel panel-warning">
+              <p>
+                Financials, valuation, and price loaded. Strategy, leadership, segments, and risk
+                factors didn't finish this pass — search this ticker again to complete them.
+              </p>
+            </div>
+          )}
           <div className="header-stats">
             <HeaderStat label="Industry" value={profile.industry} />
             <HeaderStat label="Headquarters" value={profile.headquarters} />

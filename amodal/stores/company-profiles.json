@@ -136,6 +136,7 @@
           }
         }
       },
+      "profile_complete": { "type": "boolean", "nullable": true },
       "last_updated": { "type": "datetime" }
     }
   },
