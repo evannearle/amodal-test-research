@@ -10,6 +10,25 @@ import { formatUsd, formatPrice } from "../lib/format";
 import { METRIC_INFO } from "../lib/metricInfo";
 
 const RESEARCH_TIMEOUT_MS = 120_000;
+const POLL_ATTEMPTS = 6;
+const POLL_INTERVAL_MS = 5000;
+
+// The client giving up (timeout, dropped connection) doesn't stop the
+// server-side research turn — it keeps running and often finishes and saves
+// to the store a little later. Poll briefly for that before giving up.
+async function pollForProfile(ticker, runId, runIdRef) {
+  for (let i = 0; i < POLL_ATTEMPTS; i++) {
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    if (runId !== runIdRef.current) return null;
+    try {
+      const profile = await fetchCompanyProfile(ticker);
+      if (profile) return profile;
+    } catch {
+      // ignore transient errors while polling, keep trying
+    }
+  }
+  return null;
+}
 
 function buildPrompt(ticker) {
   return (
@@ -144,12 +163,31 @@ export function Dashboard({ ticker, navigate }) {
         if (runId !== runIdRef.current) return;
         if (err.code === "UNAUTHENTICATED") {
           setStatus("unauthenticated");
-        } else if (err.name === "AbortError") {
-          if (controller.signal.reason === "timeout") setStatus("timeout");
-        } else {
-          setErrorMessage(err.message ?? "Something went wrong.");
-          setStatus("error");
+          return;
         }
+
+        // The client giving up (timeout or a dropped connection) doesn't mean
+        // the server-side research turn stopped — it keeps running
+        // independently and often finishes and saves to the store a bit
+        // later. Poll briefly before declaring failure instead of discarding
+        // work that's about to land.
+        const isTimeout = err.name === "AbortError" && controller.signal.reason === "timeout";
+        const isNetworkDrop = err.name !== "AbortError";
+        if (isTimeout || isNetworkDrop) {
+          setStatus("finishing");
+          const found = await pollForProfile(ticker, runId, runIdRef);
+          if (runId !== runIdRef.current) return;
+          if (found) {
+            setProfile(found);
+            setStatus("done");
+            return;
+          }
+          setStatus(isTimeout ? "timeout" : "error");
+          if (isNetworkDrop) setErrorMessage(err.message ?? "Connection lost.");
+          return;
+        }
+
+        // Anything else here is an AbortError from navigating away — ignore.
       }
     }
 
@@ -219,24 +257,30 @@ export function Dashboard({ ticker, navigate }) {
         </div>
       )}
 
-      {(status === "loading" || toolGroups.length > 0) && status !== "unauthenticated" && (
-        <div className="progress-list">
-          {status === "loading" && toolGroups.length === 0 && (
-            <div className="progress-item running">Checking for a cached profile…</div>
-          )}
-          {toolGroups.map((g) => (
-            <div className={"progress-item " + (g.active > 0 ? "running" : "done")} key={g.key}>
-              {g.active > 0 ? g.label : g.doneLabel}
-              {g.count > 1 ? ` ×${g.count}` : ""}
-            </div>
-          ))}
-          {status === "loading" && toolGroups.length > 0 && (
-            <div className="progress-item running progress-elapsed">
-              Still working… {elapsedSeconds}s
-            </div>
-          )}
-        </div>
-      )}
+      {(status === "loading" || status === "finishing" || toolGroups.length > 0) &&
+        status !== "unauthenticated" && (
+          <div className="progress-list">
+            {status === "loading" && toolGroups.length === 0 && (
+              <div className="progress-item running">Checking for a cached profile…</div>
+            )}
+            {toolGroups.map((g) => (
+              <div className={"progress-item " + (g.active > 0 ? "running" : "done")} key={g.key}>
+                {g.active > 0 ? g.label : g.doneLabel}
+                {g.count > 1 ? ` ×${g.count}` : ""}
+              </div>
+            ))}
+            {status === "loading" && toolGroups.length > 0 && (
+              <div className="progress-item running progress-elapsed">
+                Still working… {elapsedSeconds}s
+              </div>
+            )}
+            {status === "finishing" && (
+              <div className="progress-item running progress-elapsed">
+                Connection dropped, but the research may still be finishing on the server — checking…
+              </div>
+            )}
+          </div>
+        )}
 
       {status === "done" && profile && (
         <div className="results">
