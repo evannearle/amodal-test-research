@@ -30,6 +30,7 @@ export async function runResearchQuery(message, { onEvent, signal, maxSessionTok
   const toolCalls = [];
   const widgets = [];
   let sessionId = null;
+  let endReason = null;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -79,11 +80,14 @@ export async function runResearchQuery(message, { onEvent, signal, maxSessionTok
         case "widget":
           widgets.push({ widgetType: evt.widget_type, data: evt.data });
           break;
+        case "done":
+          endReason = evt.reason ?? null;
+          break;
         default:
           break;
       }
     }
   }
 
-  return { text, toolCalls, widgets, sessionId };
+  return { text, toolCalls, widgets, sessionId, endReason };
 }

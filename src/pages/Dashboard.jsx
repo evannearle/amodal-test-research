@@ -167,6 +167,12 @@ export function Dashboard({ ticker, navigate }) {
 
         if (fresh) {
           setProfile(fresh);
+        } else if (res.endReason === "budget_exceeded") {
+          setFallbackText(
+            "This company's filings needed more processing than the request budget allows, " +
+              "so the profile wasn't completed. This can happen on companies with unusually large " +
+              "filings. Try again — it may take a different path and complete within budget."
+          );
         } else {
           // Model finished but didn't save a structured profile — fall back
           // to whatever prose it produced rather than showing nothing.
