@@ -1,7 +1,13 @@
 import { formatPercent } from "../lib/format";
 
-export function TrendTable({ label, history, cagr, formatValue }) {
-  if (!Array.isArray(history) || history.length === 0) return null;
+export function TrendTable({ label, history: rawHistory, cagr, formatValue }) {
+  // Defensive: only render entries that actually look like a fiscal year and
+  // a number — never trust a store record blindly (see PriceChart for why).
+  const history = Array.isArray(rawHistory)
+    ? rawHistory.filter((h) => Number.isFinite(h?.fiscal_year) && Number.isFinite(h?.value))
+    : [];
+
+  if (history.length === 0) return null;
 
   return (
     <div className="trend-block">

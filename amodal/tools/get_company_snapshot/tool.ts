@@ -321,12 +321,20 @@ export default {
       if (result) {
         const timestamps = result.timestamp ?? [];
         const closes = result.indicators?.quote?.[0]?.close ?? [];
-        const points = timestamps
+        const daily = timestamps
           .map((t, i) => ({
             date: new Date(t * 1000).toISOString().slice(0, 10),
             close: closes[i],
           }))
           .filter((p) => typeof p.close === "number");
+        // Every store save re-sends this whole array (the store's set is a
+        // full replace, not a merge — confirmed directly against the live
+        // store). A ~124-point daily series is exactly the kind of large,
+        // repetitive JSON a model garbles when regenerating it by hand;
+        // downsampling to ~1 point/week keeps the chart useful at a fraction
+        // of the size and risk.
+        const weekStep = Math.max(1, Math.round(daily.length / 26));
+        const points = daily.filter((_, i) => i % weekStep === 0 || i === daily.length - 1);
         price = {
           currency: result.meta?.currency ?? null,
           currentPrice: result.meta?.regularMarketPrice ?? null,

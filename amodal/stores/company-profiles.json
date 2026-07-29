@@ -11,9 +11,9 @@
       "headquarters": { "type": "string", "nullable": true },
       "employees": { "type": "string", "nullable": true },
       "ceo_name": { "type": "string", "nullable": true },
-      "summary": { "type": "string" },
-      "strategy": { "type": "string" },
-      "go_to_market": { "type": "string" },
+      "summary": { "type": "string", "nullable": true },
+      "strategy": { "type": "string", "nullable": true },
+      "go_to_market": { "type": "string", "nullable": true },
       "revenue_segments": {
         "type": "array",
         "item": {

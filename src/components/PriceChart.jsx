@@ -2,8 +2,18 @@ const WIDTH = 640;
 const HEIGHT = 180;
 const PADDING = 8;
 
-export function PriceChart({ history }) {
-  if (!Array.isArray(history) || history.length < 2) return null;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function PriceChart({ history: rawHistory }) {
+  // Defensive: a store record is only as clean as whatever wrote it, and a
+  // malformed save (seen in practice — a corrupted date field carrying a
+  // stray JSON fragment) should never render raw data to the page. Only
+  // accept entries that actually look like a date and a number.
+  const history = Array.isArray(rawHistory)
+    ? rawHistory.filter((p) => ISO_DATE.test(p?.date) && Number.isFinite(p?.close))
+    : [];
+
+  if (history.length < 2) return null;
 
   const closes = history.map((p) => p.close);
   const min = Math.min(...closes);
