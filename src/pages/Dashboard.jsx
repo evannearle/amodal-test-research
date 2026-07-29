@@ -9,7 +9,15 @@ import { MarkdownLite } from "../lib/markdownLite";
 import { formatUsd, formatPrice } from "../lib/format";
 import { METRIC_INFO } from "../lib/metricInfo";
 
-const RESEARCH_TIMEOUT_MS = 120_000;
+// No fixed time budget for a normal research pass — reading two full filings
+// and writing a detailed profile can legitimately take a couple of minutes,
+// and cutting it off at an arbitrary wall-clock limit was discarding
+// completed work (MSFT/WM both finished just past a 120s cutoff). The real
+// abuse guard is MAX_SESSION_TOKENS below, a hard server-enforced cost cap
+// that doesn't care how long a request takes. HANG_SAFETY_MS is only a
+// last-resort net for a genuinely stuck connection, not a normal boundary.
+const MAX_SESSION_TOKENS = 400_000;
+const HANG_SAFETY_MS = 10 * 60_000;
 const POLL_ATTEMPTS = 6;
 const POLL_INTERVAL_MS = 5000;
 
@@ -113,13 +121,14 @@ export function Dashboard({ ticker, navigate }) {
       tick = setInterval(() => {
         setElapsedSeconds(Math.round((Date.now() - startedAt) / 1000));
       }, 1000);
-      timeout = setTimeout(() => controller.abort("timeout"), RESEARCH_TIMEOUT_MS);
+      timeout = setTimeout(() => controller.abort("timeout"), HANG_SAFETY_MS);
 
       const idToKey = new Map();
 
       try {
         const res = await runResearchQuery(buildPrompt(ticker), {
           signal: controller.signal,
+          maxSessionTokens: MAX_SESSION_TOKENS,
           onEvent: (evt) => {
             if (runId !== runIdRef.current) return;
             if (evt.type !== "tool_call_start" && evt.type !== "tool_call_result") return;
@@ -248,8 +257,8 @@ export function Dashboard({ ticker, navigate }) {
       {status === "timeout" && (
         <div className="panel panel-error">
           <p>
-            This is taking longer than {RESEARCH_TIMEOUT_MS / 1000}s and was stopped. Try again, or
-            ask a narrower question.
+            This request seems stuck and was stopped after {HANG_SAFETY_MS / 60_000} minutes with no
+            response. That shouldn't normally happen — try again.
           </p>
           <button className="button" onClick={() => navigate(`/company/${ticker}`)}>
             Try again

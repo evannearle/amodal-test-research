@@ -2,12 +2,15 @@
 // POST { message } and parse "data: {...}\n\n" lines. Same-origin cookie auth
 // (hosted_auth_mode: user_auth) is sent automatically by the browser.
 
-export async function runResearchQuery(message, { onEvent, signal } = {}) {
+export async function runResearchQuery(message, { onEvent, signal, maxSessionTokens } = {}) {
+  const body = { message };
+  if (maxSessionTokens) body.max_session_tokens = maxSessionTokens;
+
   const res = await fetch(`${window.location.origin}/chat/stream`, {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(body),
     signal,
   });
 
