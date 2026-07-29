@@ -14,7 +14,7 @@ export default {
       "(shares outstanding, market cap, enterprise value, P/E, EV/EBITDA, " +
       "EV/Sales, P/S, P/B, dividend yield — all computed from the same fetched " +
       "figures, don't recompute them yourself), current stock price, 52-week " +
-      "range, ~6 months of daily closing prices, and the most recent annual " +
+      "range, ~26 weekly closes (about 6 months), and the most recent annual " +
       "report + proxy filing, each with an archiveUrl (for " +
       "fetch_filing_document) and a documentUrl (absolute sec.gov link — use " +
       "this verbatim as the url when saving a source citation, don't " +
@@ -24,9 +24,12 @@ export default {
       "with fetch_filing_document. latestDEF14A can legitimately be null for " +
       "foreign filers that don't file a US-style proxy — that's normal, not " +
       "missing data. Financials are read from whichever of US-GAAP or IFRS " +
-      "the company actually reports under. Always use this single tool " +
-      "instead of loading company_tickers.json, submissions/CIK{cik}.json, " +
-      "or companyfacts yourself — those are too large to scan reliably by reading.",
+      "the company actually reports under. If the result includes a " +
+      "non-null dataNote, that field is authoritative and final — follow it " +
+      "exactly, especially any instruction not to call this tool again. " +
+      "Always use this single tool instead of loading company_tickers.json, " +
+      "submissions/CIK{cik}.json, or companyfacts yourself — those are too " +
+      "large to scan reliably by reading.",
     parametersJsonSchema: {
       type: "object",
       properties: {
@@ -311,6 +314,28 @@ export default {
       ctx.log(`companyfacts fetch failed for ${cik10}: ${err}`);
     }
 
+    // Rare but real: a brand-new CIK (e.g. a just-formed holding company from
+    // a corporate reorganization) can resolve correctly and have zero XBRL
+    // history — this is a genuine, permanent data gap, not a transient
+    // failure. Say so explicitly and forcefully in the result itself, right
+    // where the model is looking, rather than relying on the skill's system
+    // prompt alone — repeated live tests showed the model retrying this tool
+    // many times over when it saw an all-null financials block instead of
+    // accepting it, even with an explicit "don't retry" instruction upstream.
+    let dataNote = null;
+    if (
+      !financials ||
+      (financials.revenueUsd == null && financials.netIncomeUsd == null && financials.totalAssetsUsd == null)
+    ) {
+      dataNote =
+        "This CIK has no historical financial data in SEC's system — most likely a very " +
+        "recently created entity (e.g. a new holding company from a corporate reorganization). " +
+        "This is final, not an error: calling get_company_snapshot again will return the same " +
+        "result. Report the data you do have (price, industry, headquarters) and state plainly " +
+        "that financial history isn't available for this entity yet — do not call this tool " +
+        "again for this company.";
+    }
+
     let price = null;
     try {
       const chart = await ctx.request(
@@ -396,6 +421,7 @@ export default {
       financials,
       valuation,
       price,
+      dataNote,
     };
   },
 };
